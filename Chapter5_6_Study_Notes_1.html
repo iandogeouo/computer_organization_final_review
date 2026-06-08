@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 5 — 記憶體階層架構 期末考筆記</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;600;700&display=swap');
+
+  :root {
+    --bg: #f5f0e8;
+    --surface: #faf7f2;
+    --surface2: #f0ebe0;
+    --border: #ddd5c5;
+    --accent: #4a7c59;
+    --accent2: #7c5a8a;
+    --accent3: #2e7d6e;
+    --accent4: #b5651d;
+    --accent5: #8b4a6e;
+    --text: #2c2416;
+    --text-dim: #7a6a55;
+    --text-bright: #1a1208;
+    --tag-bg: rgba(74,124,89,0.12);
+    --tag-border: rgba(74,124,89,0.35);
+    --warn: #b5651d;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: var(--bg);
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 0 0 80px;
+  }
+
+  /* Header */
+  .hero {
+    background: linear-gradient(135deg, #e8dfc8 0%, #ddd0b0 40%, #e4d9c0 100%);
+    border-bottom: 2px solid #c8b898;
+    padding: 48px 40px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 360px; height: 360px;
+    background: radial-gradient(circle, rgba(74,124,89,0.1) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: rgba(74,124,89,0.15);
+    border: 1px solid rgba(74,124,89,0.4);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 12px;
+    color: #3a6648;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: 2.6rem;
+    font-weight: 900;
+    color: #1a1208;
+    line-height: 1.15;
+    margin-bottom: 10px;
+  }
+  .hero h1 span { color: #6b4a7a; }
+  .hero p { color: #7a6a55; font-size: 0.95rem; }
+
+  /* TOC */
+  .toc {
+    background: #faf7f2;
+    border: 1px solid #ddd5c5;
+    border-radius: 12px;
+    margin: 32px 40px;
+    padding: 24px 28px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .toc h3 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 8px 24px;
+  }
+  .toc a {
+    color: #7a6a55;
+    text-decoration: none;
+    font-size: 0.88rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    transition: color .2s;
+  }
+  .toc a:hover { color: #6b4a7a; }
+  .toc-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #3a6648;
+    min-width: 28px;
+  }
+
+  /* Main content */
+  .container { padding: 0 40px; }
+
+  /* Section */
+  .section {
+    background: #faf7f2;
+    border: 1px solid #ddd5c5;
+    border-radius: 14px;
+    margin-bottom: 24px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+
+  .section-header {
+    padding: 20px 28px 16px;
+    border-bottom: 1px solid #ddd5c5;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    cursor: pointer;
+  }
+  .section-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .section-header h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1.3;
+  }
+  .section-header .sub {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .section-body { padding: 22px 28px; }
+
+  /* Colors by section */
+  .s1 .section-icon { background: rgba(74,124,89,0.15); color: #3a6648; }
+  .s2 .section-icon { background: rgba(124,90,138,0.15); color: #6b4a7a; }
+  .s3 .section-icon { background: rgba(46,125,110,0.15); color: #2e7d6e; }
+  .s4 .section-icon { background: rgba(181,101,29,0.15); color: #8a4a10; }
+  .s5 .section-icon { background: rgba(139,74,110,0.15); color: #6e3458; }
+  .s6 .section-icon { background: rgba(181,101,29,0.15); color: #7a4010; }
+
+  /* Content elements */
+  h3 {
+    font-size: 0.97rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin: 18px 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h3:first-child { margin-top: 0; }
+  h3::before {
+    content: '';
+    display: inline-block;
+    width: 4px; height: 14px;
+    border-radius: 2px;
+    background: #4a7c59;
+    flex-shrink: 0;
+  }
+  .s2 h3::before { background: #7c5a8a; }
+  .s3 h3::before { background: #2e7d6e; }
+  .s4 h3::before { background: #b5651d; }
+  .s5 h3::before { background: #8b4a6e; }
+  .s6 h3::before { background: #8a4a10; }
+
+  ul { list-style: none; padding: 0; }
+  ul li {
+    padding: 3px 0 3px 18px;
+    position: relative;
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  ul li::before {
+    content: '▸';
+    position: absolute; left: 0;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    top: 5px;
+  }
+  ul ul { margin: 4px 0 4px 16px; }
+  ul ul li::before { content: '–'; top: 4px; }
+
+  /* Formula box */
+  .formula {
+    background: #ede5d5;
+    border: 1px solid #c8b898;
+    border-left: 3px solid var(--accent3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: #1f5c4e;
+    margin: 10px 0;
+  }
+  .formula .comment { color: var(--text-dim); font-style: italic; font-family: 'Noto Sans TC', sans-serif; font-size: 0.82rem; }
+
+  /* Tag pills */
+  .tag {
+    display: inline-block;
+    background: rgba(74,124,89,0.12);
+    border: 1px solid rgba(74,124,89,0.35);
+    border-radius: 6px;
+    padding: 1px 8px;
+    font-size: 0.75rem;
+    color: #3a6648;
+    margin: 2px 3px 2px 0;
+    vertical-align: middle;
+  }
+  .tag.green { background: rgba(46,125,110,0.12); border-color: rgba(46,125,110,0.35); color: #2e7d6e; }
+  .tag.orange { background: rgba(181,101,29,0.12); border-color: rgba(181,101,29,0.35); color: #8a4a10; }
+  .tag.pink { background: rgba(139,74,110,0.12); border-color: rgba(139,74,110,0.35); color: #6e3458; }
+  .tag.yellow { background: rgba(181,101,29,0.12); border-color: rgba(181,101,29,0.35); color: #7a4010; }
+  .tag.purple { background: rgba(124,90,138,0.15); border-color: rgba(124,90,138,0.4); color: #6b4a7a; }
+
+  /* Highlight callout */
+  .callout {
+    background: rgba(74,124,89,0.07);
+    border: 1px solid rgba(74,124,89,0.22);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 0.88rem;
+    margin: 10px 0;
+    color: var(--text);
+  }
+  .callout strong { color: var(--accent); }
+  .callout.warn {
+    background: rgba(181,101,29,0.07);
+    border-color: rgba(181,101,29,0.25);
+  }
+  .callout.warn strong { color: #9a4a10; }
+  .callout.green {
+    background: rgba(46,125,110,0.07);
+    border-color: rgba(46,125,110,0.25);
+  }
+  .callout.green strong { color: var(--accent3); }
+
+  /* Comparison table */
+  .ctable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 10px 0;
+  }
+  .ctable th {
+    background: #e0d5c0;
+    color: var(--text-bright);
+    padding: 8px 14px;
+    text-align: left;
+    font-weight: 600;
+    border: 1px solid var(--border);
+  }
+  .ctable td {
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .ctable tr:nth-child(even) td { background: rgba(0,0,0,0.025); }
+
+  /* Step list */
+  .steps { counter-reset: step; padding: 0; }
+  .steps li {
+    counter-increment: step;
+    padding: 6px 0 6px 36px;
+    position: relative;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute; left: 0;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    top: 7px;
+  }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid #ddd5c5; margin: 16px 0; }
+
+  /* Two columns */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 10px 0; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  .mini-card {
+    background: #eee8d8;
+    border: 1px solid #d8cdb8;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .mini-card h4 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 8px;
+  }
+
+  /* Footer exam tips */
+  .exam-tips {
+    background: linear-gradient(135deg, rgba(124,90,138,0.08), rgba(74,124,89,0.06));
+    border: 1px solid rgba(124,90,138,0.25);
+    border-radius: 14px;
+    padding: 24px 28px;
+    margin: 24px 40px 0;
+  }
+  .exam-tips h3 {
+    color: var(--accent2);
+    font-size: 1rem;
+    margin-bottom: 14px;
+  }
+  .exam-tips h3::before { background: var(--accent2); }
+  .exam-tips ul li::before { color: var(--accent2); }
+
+  p { font-size: 0.9rem; color: var(--text); margin: 6px 0; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-badge">COD 5th Edition · Chapter 5</div>
+  <h1>Large and Fast:<br><span>Exploiting Memory Hierarchy</span></h1>
+  <p>期末考完整筆記 · 105 slides · 全章重點整理</p>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <h3>📋 章節目錄</h3>
+  <div class="toc-grid">
+    <a href="#s1"><span class="toc-num">§5.1</span>Locality & 記憶體階層</a>
+    <a href="#s2"><span class="toc-num">§5.2</span>記憶體技術</a>
+    <a href="#s3"><span class="toc-num">§5.3</span>Cache 基礎 & Direct Mapped</a>
+    <a href="#s4"><span class="toc-num">§5.4</span>Cache 效能量測與改善</a>
+    <a href="#s5"><span class="toc-num">§5.5</span>可靠記憶體 (ECC)</a>
+    <a href="#s6"><span class="toc-num">§5.6</span>Virtual Machines</a>
+    <a href="#s7"><span class="toc-num">§5.7</span>Virtual Memory & TLB</a>
+    <a href="#s8"><span class="toc-num">§5.8</span>統一框架 & 3C Misses</a>
+    <a href="#s9"><span class="toc-num">§5.9</span>Cache Control FSM</a>
+    <a href="#s10"><span class="toc-num">§5.10</span>Cache Coherence</a>
+    <a href="#s13"><span class="toc-num">§5.13</span>ARM Cortex-A8 & Intel i7 實例</a>
+    <a href="#s14"><span class="toc-num">§5.14</span>Cache Blocking & Matrix Multiply</a>
+    <a href="#s15"><span class="toc-num">§5.15</span>Fallacies and Pitfalls</a>
+    <a href="#s16"><span class="toc-num">§5.16</span>Concluding Remarks</a>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- §5.1 -->
+  <div class="section s1" id="s1">
+    <div class="section-header">
+      <div class="section-icon">🎯</div>
+      <div>
+        <h2>§5.1 Locality 原則與記憶體階層</h2>
+        <div class="sub">Principle of Locality · Memory Hierarchy</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>Principle of Locality（局部性原理）</h3>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>⏱ Temporal Locality（時間局部性）</h4>
+          <ul>
+            <li>最近被存取的資料<strong>很快還會再被存取</strong></li>
+            <li>例：迴圈中的指令、感應變數</li>
+          </ul>
+        </div>
+        <div class="mini-card">
+          <h4>📍 Spatial Locality（空間局部性）</h4>
+          <ul>
+            <li>最近存取位址<strong>附近的資料</strong>也很快會被存取</li>
+            <li>例：循序指令、陣列元素</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>Memory Hierarchy（記憶體階層）</h3>
+      <ul>
+        <li>所有資料都存在磁碟（最大最慢最便宜）</li>
+        <li>把最近存取及附近的資料複製到更小的 DRAM → Main Memory</li>
+        <li>再把更最近的資料複製到 SRAM → Cache Memory（附在 CPU）</li>
+        <li><span class="tag">CPU Registers</span> → <span class="tag">L1 Cache</span> → <span class="tag">L2/L3 Cache</span> → <span class="tag">DRAM</span> → <span class="tag yellow">Disk</span></li>
+      </ul>
+
+      <h3>基本術語</h3>
+      <table class="ctable">
+        <tr><th>術語</th><th>說明</th></tr>
+        <tr><td><strong>Block / Line</strong></td><td>資料複製的基本單位，可能是多個 words</td></tr>
+        <tr><td><strong>Hit</strong></td><td>所需資料在上層存在 → Hit ratio = hits / accesses</td></tr>
+        <tr><td><strong>Miss</strong></td><td>所需資料不在上層 → 從下層複製一整個 Block</td></tr>
+        <tr><td><strong>Miss Penalty</strong></td><td>從下層取資料所花的時間</td></tr>
+        <tr><td><strong>Miss Ratio</strong></td><td>1 – Hit ratio</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- §5.2 -->
+  <div class="section s2" id="s2">
+    <div class="section-header">
+      <div class="section-icon">💾</div>
+      <div>
+        <h2>§5.2 記憶體技術</h2>
+        <div class="sub">SRAM · DRAM · Flash · Disk</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>各類記憶體比較</h3>
+      <table class="ctable">
+        <tr><th>類型</th><th>存取時間</th><th>$/GB</th><th>特性</th></tr>
+        <tr><td><span class="tag purple">SRAM</span></td><td>0.5 – 2.5 ns</td><td>$2000–$5000</td><td>快、貴、用於 Cache</td></tr>
+        <tr><td><span class="tag">DRAM</span></td><td>50 – 70 ns</td><td>$20–$75</td><td>電容存儲，需定期 refresh，用於 Main Memory</td></tr>
+        <tr><td><span class="tag orange">Flash</span></td><td>~100× 比磁碟快</td><td>介於 DRAM 與 Disk</td><td>非揮發性，寫入次數有限制</td></tr>
+        <tr><td><span class="tag yellow">Disk</span></td><td>5 – 20 ms</td><td>$0.20–$2</td><td>慢、便宜、大容量</td></tr>
+      </table>
+      <div class="callout warn">
+        <strong>⚠️ Ideal Memory</strong>：我們想要 SRAM 的速度 + Disk 的容量與低成本 → 這就是為什麼需要 Memory Hierarchy！
+      </div>
+
+      <h3>DRAM 技術細節</h3>
+      <ul>
+        <li>資料存成電容的電荷，用單一電晶體存取</li>
+        <li>必須定期 <strong>refresh</strong>（讀取後寫回，以一整 row 為單位）</li>
+        <li><strong>DDR DRAM</strong>：在 clock 的上升與下降緣都傳輸資料（Double Data Rate）</li>
+        <li><strong>QDR DRAM</strong>：分開的 DDR 輸入與輸出</li>
+      </ul>
+
+      <h3>Flash Storage 重點</h3>
+      <ul>
+        <li><strong>NOR flash</strong>：可隨機讀寫，用於嵌入式系統的指令記憶體</li>
+        <li><strong>NAND flash</strong>：密度更高，以區塊為單位存取，更便宜，用於 USB、SD 卡等</li>
+        <li>Flash bits 在寫入數千次後會壞掉 → 需要 <strong>Wear Leveling</strong>（把資料分散到使用較少的區塊）</li>
+      </ul>
+
+      <h3>磁碟存取時間計算（重要！）</h3>
+      <div class="callout green">
+        <strong>平均讀取時間 = Seek Time + Rotational Latency + Transfer Time + Controller Overhead</strong><br>
+        旋轉延遲 = ½ × (1 rotation time)；例如 15000 rpm → 1 rot = 4ms → 平均 2ms
+      </div>
+      <div class="formula">
+        <span class="comment">範例：512B sector, 15,000rpm, 4ms seek, 100MB/s transfer, 0.2ms overhead</span><br>
+        = 4ms (seek) + 2ms (rotational) + 0.005ms (transfer) + 0.2ms (controller)<br>
+        = <strong>6.2ms</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- §5.3 -->
+  <div class="section s3" id="s3">
+    <div class="section-header">
+      <div class="section-icon">⚡</div>
+      <div>
+        <h2>§5.3 Cache 基礎</h2>
+        <div class="sub">Direct Mapped · Tags · Write Policy</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>Direct Mapped Cache</h3>
+      <ul>
+        <li>每個 memory block 只有<strong>一個固定的 cache 位置</strong></li>
+        <li>對應規則：<code>(Block address) mod (# Blocks in cache)</code></li>
+        <li># Blocks 必須是 2 的次方，所以用<strong>低位元的 address bits</strong> 當 index</li>
+      </ul>
+
+      <h3>Address 分解（超重要！）</h3>
+      <table class="ctable">
+        <tr><th>欄位</th><th>用途</th><th>位元數來源</th></tr>
+        <tr><td><span class="tag pink">Tag</span></td><td>辨識是哪個 block（高位元）</td><td>32 – Index bits – Offset bits</td></tr>
+        <tr><td><span class="tag">Index</span></td><td>決定放在 cache 哪個 set</td><td>log₂(# sets)</td></tr>
+        <tr><td><span class="tag green">Offset</span></td><td>在 block 內的位元組偏移</td><td>log₂(block size in bytes)</td></tr>
+      </table>
+      <div class="formula">
+        <span class="comment">範例：64 blocks, 16 bytes/block, address 1200</span><br>
+        Block address = 1200 / 16 = 75<br>
+        Cache index = 75 mod 64 = <strong>11</strong><br>
+        Offset = 4 bits (log₂16), Index = 6 bits (log₂64), Tag = 22 bits
+      </div>
+
+      <h3>Valid Bit 與 Tag</h3>
+      <ul>
+        <li><strong>Valid bit</strong>：1 = 有效資料，0 = 空的（初始全為 0）</li>
+        <li><strong>Tag</strong>：只需存 address 的高位元，判斷是否為目標 block</li>
+        <li>Hit 條件：valid bit = 1 且 tag 相符</li>
+      </ul>
+
+      <h3>Block Size 考量</h3>
+      <ul>
+        <li>較大的 block → 利用 spatial locality → 降低 miss rate</li>
+        <li>但 fixed-size cache 下，更大的 block → 更少的 blocks → <strong>競爭增加 → miss rate 反升</strong></li>
+        <li>更大的 miss penalty</li>
+        <li>解法：Early restart & Critical-word-first</li>
+      </ul>
+
+      <h3>Cache Miss 處理</h3>
+      <ul>
+        <li><strong>Hit</strong>：CPU 正常繼續執行</li>
+        <li><strong>Miss</strong>：暫停 pipeline → 從下層取整個 block → 再繼續</li>
+        <li>Instruction cache miss：重新取指令</li>
+        <li>Data cache miss：完成資料存取</li>
+      </ul>
+
+      <h3>Write 策略（很常考！）</h3>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>✍️ Write-Through</h4>
+          <ul>
+            <li>寫入時<strong>同時更新 cache 和 memory</strong></li>
+            <li>Cache 和 memory 永遠一致</li>
+            <li>缺點：每次寫入都要存取 memory，很慢</li>
+            <li>解法：<strong>Write Buffer</strong>（暫存待寫資料，讓 CPU 繼續）</li>
+          </ul>
+        </div>
+        <div class="mini-card">
+          <h4>🔄 Write-Back</h4>
+          <ul>
+            <li>只更新 cache，暫時不更新 memory</li>
+            <li>用 <strong>Dirty bit</strong> 標記哪些 block 被修改過</li>
+            <li>Dirty block 被替換時才寫回 memory</li>
+            <li>可搭配 Write Buffer 讓替換更有效率</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>Write Miss 時的 Write Allocation</h3>
+      <ul>
+        <li><strong>Allocate on miss</strong>：先把 block 從 memory 取到 cache，再寫入</li>
+        <li><strong>Write around</strong>：不取 block，直接寫到 memory（程式通常會整塊初始化再讀）</li>
+        <li>Write-back 通常搭配 Allocate on miss</li>
+      </ul>
+
+      <h3>實例：Intrinsity FastMATH</h3>
+      <ul>
+        <li>嵌入式 MIPS，12 stage pipeline，Split cache（I-cache + D-cache 分開）</li>
+        <li>各 16KB，256 blocks × 16 words/block</li>
+        <li>SPEC2000 miss rates：I-cache 0.4%，D-cache 11.4%，加權平均 <strong>3.2%</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- §5.4 -->
+  <div class="section s4" id="s4">
+    <div class="section-header">
+      <div class="section-icon">📊</div>
+      <div>
+        <h2>§5.4 Cache 效能量測與改善</h2>
+        <div class="sub">AMAT · Associativity · Multilevel Cache</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>Cache 效能公式（超重要！）</h3>
+      <div class="formula">
+        CPU time = (Program exec cycles + Memory stall cycles) × Clock cycle time<br><br>
+        Memory stall cycles = (Mem accesses / Program) × Miss rate × Miss penalty<br>
+                            = (Instructions / Program) × (Misses / Instruction) × Miss penalty
+      </div>
+      <div class="formula">
+        <span class="comment">範例：I-cache miss rate=2%, D-cache miss rate=4%, Miss penalty=100 cycles, Base CPI=2, Load/Store=36%</span><br>
+        I-cache miss cycles = 0.02 × 100 = 2 per instruction<br>
+        D-cache miss cycles = 0.36 × 0.04 × 100 = 1.44 per instruction<br>
+        Actual CPI = 2 + 2 + 1.44 = <strong>5.44</strong>（理想 CPU 快 2.72×）
+      </div>
+
+      <h3>AMAT（Average Memory Access Time）</h3>
+      <div class="formula">
+        AMAT = Hit time + Miss rate × Miss penalty<br><br>
+        <span class="comment">範例：1ns clock, hit=1 cycle, miss penalty=20 cycles, miss rate=5%</span><br>
+        AMAT = 1 + 0.05 × 20 = <strong>2ns</strong>（= 2 cycles per instruction）
+      </div>
+      <div class="callout warn">
+        <strong>⚠️ 注意</strong>：CPU 效能提升時（更快的 clock），miss penalty 的影響會<strong>更大</strong>！設計時不能忽視 cache 行為。
+      </div>
+
+      <h3>Associativity（關聯度）</h3>
+      <table class="ctable">
+        <tr><th>類型</th><th>放置方式</th><th>比較器數量</th><th>特性</th></tr>
+        <tr><td><span class="tag">Direct Mapped</span></td><td>只有 1 個選擇</td><td>1</td><td>最簡單最快，衝突 miss 多</td></tr>
+        <tr><td><span class="tag purple">n-way Set Associative</span></td><td>同一 set 內有 n 個選擇</td><td>n</td><td>平衡效能與複雜度</td></tr>
+        <tr><td><span class="tag green">Fully Associative</span></td><td>可放在任何位置</td><td># entries</td><td>miss rate 最低，硬體最貴</td></tr>
+      </table>
+      <ul>
+        <li>Set index：(Block address) mod (# Sets in cache)</li>
+        <li>64KB D-cache, 16-word blocks 的模擬：1-way 10.3% → 2-way 8.6% → 4-way 8.3% → 8-way 8.1%（<strong>邊際效益遞減</strong>）</li>
+      </ul>
+
+      <h3>Replacement Policy（替換政策）</h3>
+      <ul>
+        <li><strong>LRU（Least Recently Used）</strong>：換掉最久沒用的；2-way 容易，4-way 還可以，超過就太難了</li>
+        <li><strong>Random</strong>：在高關聯度時效果接近 LRU，實作較簡單</li>
+        <li>Direct mapped：沒有選擇，直接換</li>
+      </ul>
+
+      <h3>Multilevel Cache（多層 Cache）</h3>
+      <ul>
+        <li><strong>L1 Cache</strong>（Primary）：最小最快，接在 CPU 旁邊；設計重點：<strong>最小化 hit time</strong></li>
+        <li><strong>L2 Cache</strong>：服務 L1 miss；比 L1 大慢，但比 DRAM 快；設計重點：<strong>最低 miss rate</strong>（避免存取 main memory）</li>
+        <li>有些高端系統還有 L3 Cache</li>
+      </ul>
+      <div class="formula">
+        <span class="comment">範例：Base CPI=1, clock=4GHz, miss rate=2%, DRAM=100ns</span><br>
+        只有 L1：Miss penalty = 400 cycles → CPI = 1 + 0.02×400 = <strong>9</strong><br>
+        <br>
+        加上 L2（5ns access, global miss rate=0.5%）：<br>
+        L1 miss with L2 hit penalty = 20 cycles<br>
+        L1 miss with L2 miss penalty = 400 cycles<br>
+        CPI = 1 + 0.02×20 + 0.005×400 = <strong>3.4</strong>（快了 9/3.4 = <strong>2.6×</strong>）
+      </div>
+
+      <h3>Software 優化：Cache Blocking（DGEMM）</h3>
+      <ul>
+        <li>矩陣乘法（DGEMM）直接迭代：column-major array 會有大步距，spatial locality 差</li>
+        <li><strong>Blocking（分塊）</strong>：把矩陣切成 BLOCKSIZE × BLOCKSIZE 的小塊，讓每塊資料在被替換前盡量被重複使用</li>
+        <li>目標：在 cache 容量內最大化資料重用次數</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- §5.5 -->
+  <div class="section s5" id="s5">
+    <div class="section-header">
+      <div class="section-icon">🛡️</div>
+      <div>
+        <h2>§5.5 可靠記憶體階層（ECC）</h2>
+        <div class="sub">Dependability · Hamming Code · SEC/DEC</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>可靠性指標</h3>
+      <table class="ctable">
+        <tr><th>指標</th><th>說明</th></tr>
+        <tr><td><strong>MTTF</strong></td><td>Mean Time To Failure（平均無故障時間）</td></tr>
+        <tr><td><strong>MTTR</strong></td><td>Mean Time To Repair（平均修復時間）</td></tr>
+        <tr><td><strong>MTBF</strong></td><td>MTTF + MTTR</td></tr>
+        <tr><td><strong>Availability</strong></td><td>MTTF / (MTTF + MTTR)</td></tr>
+      </table>
+
+      <h3>Hamming SEC Code（Single Error Correction）</h3>
+      <ul>
+        <li><strong>Hamming distance</strong>：兩個 bit pattern 之間不同 bits 的數量</li>
+        <li>Min distance = 2：可偵測 single bit error（如 parity code）</li>
+        <li>Min distance = 3：可<strong>更正 single bit error</strong>，偵測 2-bit error</li>
+        <li>Parity bits 放在 2 的次方位置（位置 1, 2, 4, 8...）</li>
+        <li>解碼時：parity bits 的值組合 = 指出哪個 bit 出錯（0000 = 無錯誤）</li>
+      </ul>
+
+      <h3>SEC/DEC（加上 Double Error Detection）</h3>
+      <ul>
+        <li>在整個 word 加一個額外的 parity bit（pn）→ Hamming distance = 4</li>
+        <li>H even + pn even：無錯誤</li>
+        <li>H odd + pn odd：可更正的 single bit error</li>
+        <li>H even + pn odd：pn 本身出錯</li>
+        <li>H odd + pn even：<strong>double error</strong>，無法更正</li>
+        <li><span class="tag green">注意</span>：ECC DRAM 使用 SEC/DEC，每 64 bits 資料用 8 bits 保護</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- §5.6 Virtual Machines -->
+  <div class="section s6" id="s6">
+    <div class="section-header">
+      <div class="section-icon">🖥️</div>
+      <div>
+        <h2>§5.6 Virtual Machines</h2>
+        <div class="sub">VMM · Virtualization · Timer</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>Virtual Machine 概念</h3>
+      <ul>
+        <li>Host 電腦模擬 guest OS 和機器資源</li>
+        <li>優點：隔離、安全、資源共享</li>
+        <li>效能有損耗，但現代高效能 CPU 可接受</li>
+        <li>例：IBM VM/370、VMWare、Microsoft Virtual PC</li>
+      </ul>
+
+      <h3>Virtual Machine Monitor (VMM)</h3>
+      <ul>
+        <li>把虛擬資源對應到實體資源（memory, I/O devices, CPUs）</li>
+        <li>Guest code 在 <strong>user mode</strong> 執行，遇到特權指令或受保護資源時 trap 到 VMM</li>
+        <li>VMM 處理真實 I/O 裝置，為 guest 模擬虛擬 I/O 裝置</li>
+      </ul>
+
+      <h3>Timer Virtualization 範例</h3>
+      <ul>
+        <li>VMM 攔截 timer interrupt → 選擇下一個 VM 執行</li>
+        <li>若 VM 需要 timer，VMM 模擬一個 virtual timer</li>
+      </ul>
+
+      <h3>ISA 支援需求</h3>
+      <ul>
+        <li>所有實體資源只能透過<strong>特權指令</strong>存取（含 page tables, interrupt controls, I/O registers）</li>
+        <li>x86 等現代 ISA 正在加強 virtualization 支援</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- §5.7 Virtual Memory -->
+  <div class="section s1" id="s7">
+    <div class="section-header">
+      <div class="section-icon">🗺️</div>
+      <div>
+        <h2>§5.7 Virtual Memory & TLB</h2>
+        <div class="sub">Page Table · TLB · Page Fault</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>Virtual Memory 概念</h3>
+      <ul>
+        <li>把 Main Memory 當作 Disk 的 Cache 使用</li>
+        <li>由 CPU hardware + OS 共同管理</li>
+        <li>每個程式有自己的<strong>私有虛擬位址空間</strong>，受到保護</li>
+        <li>VM 的 "block" 稱為 <strong>Page</strong></li>
+        <li>VM 的 "miss" 稱為 <strong>Page Fault</strong></li>
+      </ul>
+
+      <h3>Page Table</h3>
+      <ul>
+        <li>以 virtual page number 為 index 的陣列</li>
+        <li>每個 PTE（Page Table Entry）存：physical page number + status bits（referenced, dirty...）</li>
+        <li>若 page 不在 memory：PTE 指向 disk 上的 swap space 位置</li>
+        <li>CPU 有 <strong>page table register</strong> 指向目前的 page table</li>
+        <li>使用 <strong>Fully Associative</strong> 放置（任何 virtual page 可對應任何 physical page）→ 降低 page fault rate</li>
+      </ul>
+
+      <h3>Page Fault 處理（OS 負責）</h3>
+      <ol class="steps">
+        <li>用 faulting virtual address 找到 PTE</li>
+        <li>在磁碟上找到對應的 page</li>
+        <li>選擇要替換的 page（若 dirty 則先寫回磁碟）</li>
+        <li>把 page 讀入 memory，更新 page table</li>
+        <li>讓 process 恢復執行（從 faulting instruction 重新開始）</li>
+      </ol>
+      <ul>
+        <li>Page fault penalty：數百萬個 clock cycles（很痛），所以要最小化 page fault rate</li>
+        <li>寫入策略：只能用 <strong>Write-Back</strong>（disk 寫入需要數百萬 cycles，write-through 不切實際）</li>
+        <li>用 <strong>Dirty bit</strong> 記錄 page 是否被修改</li>
+        <li>替換政策：LRU 近似（用 <strong>Reference bit</strong>，OS 定期清零）</li>
+      </ul>
+
+      <h3>TLB（Translation Look-aside Buffer）</h3>
+      <ul>
+        <li>每次位址轉換都要存取 page table（在 memory），太慢了</li>
+        <li>TLB = CPU 內的 <strong>PTE cache</strong>（快取 Page Table Entries）</li>
+        <li>典型規格：16–512 PTEs，hit 0.5–1 cycle，miss 10–100 cycles，miss rate 0.01%–1%</li>
+      </ul>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>TLB Hit（最常見）</h4>
+          <p>直接從 TLB 取到 physical address，速度極快</p>
+        </div>
+        <div class="mini-card">
+          <h4>TLB Miss</h4>
+          <p>Page 在 memory 中但 PTE 不在 TLB → 從 memory 載入 PTE 到 TLB，再重試（by hardware 或 software）</p>
+        </div>
+      </div>
+      <ul>
+        <li>若 page 不在 memory → TLB miss → Page fault → OS 處理</li>
+        <li>TLB 使用 <strong>Fully Associative</strong> 或 small set-associative</li>
+      </ul>
+
+      <h3>Memory Protection</h3>
+      <ul>
+        <li>Page table 和其他 state 只能在 <strong>supervisor mode（kernel mode）</strong>存取</li>
+        <li>System call exception（MIPS 的 syscall）進入 kernel mode</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- §5.8 -->
+  <div class="section s3" id="s8">
+    <div class="section-header">
+      <div class="section-icon">🔄</div>
+      <div>
+        <h2>§5.8 記憶體階層統一框架 & 3C Misses</h2>
+        <div class="sub">Block Placement · Replacement · Write Policy · Sources of Misses</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>各層級通用的四個問題</h3>
+      <table class="ctable">
+        <tr><th>問題</th><th>Cache</th><th>Virtual Memory</th></tr>
+        <tr><td><strong>Block 放哪？</strong></td><td>Direct / n-way / Fully associative</td><td>Fully associative（任何 virtual page）</td></tr>
+        <tr><td><strong>怎麼找到？</strong></td><td>Index + tag 比較</td><td>Page table lookup（無需比較）</td></tr>
+        <tr><td><strong>替換誰？</strong></td><td>LRU or Random</td><td>LRU 近似（reference bit）</td></tr>
+        <tr><td><strong>寫入策略？</strong></td><td>Write-through 或 Write-back</td><td>只能 Write-back</td></tr>
+      </table>
+
+      <h3>3C Miss 分類（超重要！）</h3>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>❄️ Compulsory Miss（Cold Start Miss）</h4>
+          <p>第一次存取某個 block → 一定會 miss，無法避免</p>
+        </div>
+        <div class="mini-card">
+          <h4>📦 Capacity Miss</h4>
+          <p>Cache 太小，裝不下所有需要的 blocks → 被替換掉的 block 之後又需要</p>
+        </div>
+      </div>
+      <div class="mini-card" style="margin-top:12px;">
+        <h4>⚔️ Conflict Miss（Collision Miss）</h4>
+        <p>在 non-fully associative cache 中，多個 blocks 競爭同一個 set → 在 fully associative cache 中這些 miss 不會發生</p>
+      </div>
+
+      <h3>Cache Design Trade-offs 表格</h3>
+      <table class="ctable">
+        <tr><th>設計改變</th><th>對 Miss Rate 的影響</th><th>負面效果</th></tr>
+        <tr><td>增大 cache size</td><td>↓ capacity misses</td><td>可能增加 access time</td></tr>
+        <tr><td>增加 associativity</td><td>↓ conflict misses</td><td>可能增加 access time</td></tr>
+        <tr><td>增大 block size</td><td>↓ compulsory misses</td><td>增大 miss penalty；過大時因 pollution 反而↑ miss rate</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- §5.9 FSM -->
+  <div class="section s2" id="s9">
+    <div class="section-header">
+      <div class="section-icon">🤖</div>
+      <div>
+        <h2>§5.9 用 FSM 控制 Cache</h2>
+        <div class="sub">Finite State Machine · Cache Controller</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>範例 Cache 特性</h3>
+      <ul>
+        <li>Direct-mapped, write-back, write allocate</li>
+        <li>Block size: 4 words（16 bytes），Cache size: 16 KB（1024 blocks）</li>
+        <li>32-bit byte addresses，每個 block 有 valid bit 和 dirty bit</li>
+        <li><strong>Blocking cache</strong>：CPU 等待直到存取完成</li>
+        <li>Address 分解：Tag 18 bits + Index 10 bits + Offset 4 bits</li>
+      </ul>
+
+      <h3>FSM 控制的概念</h3>
+      <ul>
+        <li>用 Finite State Machine（有限狀態機）來排序控制步驟</li>
+        <li>State 以 binary 編碼，存在暫存器中</li>
+        <li>Next state = f(current state, current inputs)</li>
+        <li>Control outputs = f(current state)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- §5.10 Cache Coherence -->
+  <div class="section s4" id="s10">
+    <div class="section-header">
+      <div class="section-icon">🔗</div>
+      <div>
+        <h2>§5.10 Cache Coherence</h2>
+        <div class="sub">Multiprocessor · Snooping · Memory Consistency</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>Cache Coherence 問題</h3>
+      <ul>
+        <li>當多個 CPU 共享同一個實體位址空間，且各有自己的 cache，寫入一個 cache 後，其他 CPU 的 cache 就<strong>過時</strong>了</li>
+      </ul>
+      <table class="ctable">
+        <tr><th>時間</th><th>事件</th><th>CPU A cache</th><th>CPU B cache</th><th>Memory</th></tr>
+        <tr><td>0</td><td>-</td><td>-</td><td>-</td><td>0</td></tr>
+        <tr><td>1</td><td>A 讀 X</td><td>0</td><td>-</td><td>0</td></tr>
+        <tr><td>2</td><td>B 讀 X</td><td>0</td><td>0</td><td>0</td></tr>
+        <tr><td>3</td><td>A 寫 X=1</td><td>1</td><td>0 (舊!)</td><td>1</td></tr>
+      </table>
+
+      <h3>Coherence 的正式定義</h3>
+      <ul>
+        <li>P 寫 X 後 P 讀 X（中間無其他寫入）→ 讀到剛寫的值</li>
+        <li>P1 寫 X 後（夠久之後）P2 讀 X → 讀到剛寫的值</li>
+        <li>P1 寫 X、P2 寫 X → 所有 processor 看到<strong>相同的寫入順序</strong></li>
+      </ul>
+
+      <h3>Coherence Protocols</h3>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>👁 Snooping Protocol</h4>
+          <ul>
+            <li>每個 cache 監聽（snoop）bus 上的讀寫</li>
+            <li>簡單，適用於共享 bus 的多處理器</li>
+          </ul>
+        </div>
+        <div class="mini-card">
+          <h4>📋 Directory-based Protocol</h4>
+          <ul>
+            <li>用一個 directory 記錄每個 block 被哪些 cache 持有</li>
+            <li>適用於更大規模的多處理器系統</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>Invalidating Snooping Protocol（重要！）</h3>
+      <ul>
+        <li>某個 cache 要<strong>寫入</strong>某 block 時，先在 bus 上廣播 <strong>Invalidate 訊息</strong></li>
+        <li>其他 cache 把該 block 標記為 invalid</li>
+        <li>之後其他 CPU 讀取時 cache miss → 從擁有該 block 的 cache 取得更新值</li>
+      </ul>
+      <table class="ctable">
+        <tr><th>CPU 動作</th><th>Bus 動作</th><th>A cache</th><th>B cache</th><th>Memory</th></tr>
+        <tr><td>A 讀 X</td><td>Cache miss for X</td><td>0</td><td>-</td><td>0</td></tr>
+        <tr><td>B 讀 X</td><td>Cache miss for X</td><td>0</td><td>0</td><td>0</td></tr>
+        <tr><td>A 寫 X=1</td><td>Invalidate for X</td><td>1</td><td>(invalid)</td><td>0</td></tr>
+        <tr><td>B 讀 X</td><td>Cache miss for X</td><td>1</td><td>1</td><td>1</td></tr>
+      </table>
+
+      <h3>Memory Consistency</h3>
+      <ul>
+        <li>假設：寫入完成 = 所有 processor 都看到了；processor 不重新排序 writes</li>
+        <li>結果：P 先寫 X 再寫 Y → 所有看到新 Y 的 processor 也能看到新 X</li>
+        <li>Processors 可以 reorder reads，但<strong>不能 reorder writes</strong></li>
+      </ul>
+    </div>
+  </div>
+
+
+  <!-- §5.13 -->
+  <div class="section s5" id="s13">
+    <div class="section-header">
+      <div class="section-icon">🔬</div>
+      <div>
+        <h2>§5.13 ARM Cortex-A8 & Intel Core i7 實例</h2>
+        <div class="sub">Multilevel On-Chip Caches · 2-Level TLB · Non-blocking Cache</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>Multilevel On-Chip Caches 比較表（ARM Cortex-A8 vs Intel Nehalem/Core i7）</h3>
+      <table class="ctable">
+        <tr><th>特性</th><th>ARM Cortex-A8</th><th>Intel Nehalem (Core i7)</th></tr>
+        <tr><td>L1 cache 組織</td><td>Split I/D cache</td><td>Split I/D cache（per core）</td></tr>
+        <tr><td>L1 cache 大小</td><td>32 KiB each</td><td>32 KiB each per core</td></tr>
+        <tr><td>L1 associativity</td><td>4-way (I), 4-way (D)</td><td>4-way (I), 8-way (D)</td></tr>
+        <tr><td>L1 replacement</td><td>Random</td><td>Approximated LRU</td></tr>
+        <tr><td>L1 block size</td><td>64 bytes</td><td>64 bytes</td></tr>
+        <tr><td>L1 write policy</td><td>Write-back, Write-allocate(?)</td><td>Write-back, No-write-allocate</td></tr>
+        <tr><td>L1 hit time</td><td>1 clock cycle</td><td>4 clock cycles, pipelined</td></tr>
+        <tr><td>L2 cache 組織</td><td>Unified (I+D)</td><td>Unified per core</td></tr>
+        <tr><td>L2 cache 大小</td><td>128 KiB – 1 MiB</td><td>256 KiB</td></tr>
+        <tr><td>L2 associativity</td><td>8-way set associative</td><td>8-way set associative</td></tr>
+        <tr><td>L2 replacement</td><td>Random(?)</td><td>Approximated LRU</td></tr>
+        <tr><td>L2 block size</td><td>64 bytes</td><td>64 bytes</td></tr>
+        <tr><td>L2 write policy</td><td>Write-back, Write-allocate(?)</td><td>Write-back, Write-allocate</td></tr>
+        <tr><td>L2 hit time</td><td>11 clock cycles</td><td>10 clock cycles</td></tr>
+        <tr><td>L3 cache 組織</td><td>—</td><td>Unified, shared</td></tr>
+        <tr><td>L3 cache 大小</td><td>—</td><td>8 MiB</td></tr>
+        <tr><td>L3 associativity</td><td>—</td><td>16-way set associative</td></tr>
+        <tr><td>L3 block size</td><td>—</td><td>64 bytes</td></tr>
+        <tr><td>L3 write policy</td><td>—</td><td>Write-back, Write-allocate</td></tr>
+        <tr><td>L3 hit time</td><td>—</td><td>35 clock cycles</td></tr>
+      </table>
+
+      <h3>2-Level TLB 組織比較表</h3>
+      <table class="ctable">
+        <tr><th>特性</th><th>ARM Cortex-A8</th><th>Intel Core i7</th></tr>
+        <tr><td>Virtual address</td><td>32 bits</td><td>48 bits</td></tr>
+        <tr><td>Physical address</td><td>32 bits</td><td>44 bits</td></tr>
+        <tr><td>Page size</td><td>Variable: 4, 16, 64 KiB, 1, 16 MiB</td><td>Variable: 4 KiB, 2/4 MiB</td></tr>
+        <tr><td>L1 TLB</td><td>Fully associative, 32 entries, round robin；I/D 各一；miss by hardware</td><td>4-way set assoc, LRU；I-TLB 128 entries (small), 7/thread (large)；D-TLB 64 entries (small), 32 (large)</td></tr>
+        <tr><td>L2 TLB</td><td>—</td><td>4-way set assoc, LRU, 512 entries；miss by hardware</td></tr>
+      </table>
+
+      <h3>Supporting Multiple Issue（多發射支援）</h3>
+      <ul>
+        <li>兩者都用 <strong>multi-banked cache</strong>，允許每個 cycle 多次存取（前提：無 bank conflict）</li>
+        <li>Core i7 特有 cache 優化：
+          <ul>
+            <li><strong>Return requested word first</strong>：先把 CPU 需要的 word 送出去，不用等整個 block 載入完</li>
+            <li><strong>Non-blocking cache（Hit under miss / Miss under miss）</strong>：cache miss 時不完全暫停，可繼續服務其他不相依的存取</li>
+            <li><strong>Data prefetching</strong>：預先把即將需要的資料載入 cache</li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- §5.14 -->
+  <div class="section s6" id="s14">
+    <div class="section-header">
+      <div class="section-icon">⚡</div>
+      <div>
+        <h2>§5.14 Going Faster: Cache Blocking & Matrix Multiply</h2>
+        <div class="sub">DGEMM · Subword Parallelism · Blocking</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>進階 DGEMM 優化</h3>
+      <ul>
+        <li>結合兩種技術：<strong>Cache Blocking</strong>（§5.4 已介紹）+ <strong>Subword Parallelism</strong>（SIMD）</li>
+        <li>Subword parallelism：一次對多個資料執行相同運算（如 AVX 指令集一次處理多個 double）</li>
+        <li>兩者合用可大幅提升矩陣乘法的效能</li>
+      </ul>
+      <div class="callout green">
+        <strong>核心概念</strong>：先用 blocking 確保資料在 cache 裡被充分重用，再用 SIMD 讓每次運算處理更多資料 → 雙管齊下榨乾 CPU 效能。
+      </div>
+    </div>
+  </div>
+
+  <!-- §5.15 -->
+  <div class="section s4" id="s15">
+    <div class="section-header">
+      <div class="section-icon">⚠️</div>
+      <div>
+        <h2>§5.15 Fallacies and Pitfalls（常見錯誤與陷阱）</h2>
+        <div class="sub">Byte vs Word · AMAT · Segments · VMM</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>Pitfall 1：Byte vs. Word Addressing 混淆</h3>
+      <ul>
+        <li>32-byte direct-mapped cache，4-byte blocks：</li>
+        <li>Byte address 36 → Block 36/4=9，9 mod 8 = <strong>block 1</strong></li>
+        <li>Word address 36 → Block 36，36 mod 8 = <strong>block 4</strong></li>
+      </ul>
+      <div class="callout warn"><strong>⚠️ 考試陷阱</strong>：搞清楚題目給的是 byte address 還是 word address！</div>
+
+      <h3>Pitfall 2：忽略 Memory System 對程式碼的影響</h3>
+      <ul>
+        <li>以行（row）還是以列（column）迭代陣列，效能差異極大</li>
+        <li>大步距（large stride）存取 → 空間局部性差 → 大量 cache miss</li>
+        <li>Compiler 優化和演算法設計都需考慮 memory access pattern</li>
+      </ul>
+
+      <h3>Pitfall 3：多核心共享 L2/L3 的 Conflict Miss</h3>
+      <ul>
+        <li>若共享 cache 的 associativity 低於 core 數 → 大量 conflict miss</li>
+        <li>核心數越多 → 需要更高的 associativity</li>
+      </ul>
+
+      <h3>Pitfall 4：用 AMAT 評估 Out-of-Order Processor</h3>
+      <ul>
+        <li>AMAT 沒考慮 <strong>non-blocked accesses</strong> 的效果</li>
+        <li>Out-of-order CPU 在 cache miss 期間可繼續執行其他指令</li>
+        <li>正確做法：用 <strong>system simulation</strong></li>
+      </ul>
+
+      <h3>Pitfall 5：用 Segments 擴展位址範圍</h3>
+      <ul>
+        <li>如 Intel 80286 的 segment 機制：segment 不一定夠大、位址運算複雜</li>
+        <li>現代做法用 virtual memory 取代</li>
+      </ul>
+
+      <h3>Pitfall 6：在不支援虛擬化的 ISA 上實作 VMM</h3>
+      <ul>
+        <li>若 ISA 有非特權指令可存取硬體資源，VMM 就無法正確攔截</li>
+        <li>解法：擴充 ISA 加入 virtualization 支援，或要求 guest OS 不使用問題指令</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- §5.16 -->
+  <div class="section s3" id="s16">
+    <div class="section-header">
+      <div class="section-icon">🎓</div>
+      <div>
+        <h2>§5.16 Concluding Remarks（結語）</h2>
+        <div class="sub">Big Picture · Key Takeaways</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <h3>核心思想總結</h3>
+      <ul>
+        <li>快的記憶體小，大的記憶體慢 → 我們想要又快又大的記憶體</li>
+        <li><strong>Caching 給了我們這個幻覺</strong>，透過 locality 原理讓常用資料留在快的地方</li>
+        <li>Memory Hierarchy：L1 ↔ L2 ↔ … ↔ DRAM ↔ Disk</li>
+        <li>Memory system 設計對多處理器系統尤其關鍵（cache coherence 問題）</li>
+      </ul>
+      <div class="callout green">
+        <strong>一句話總結整章</strong>：利用 Locality 原理，透過分層的 Cache 架構，讓程式看起來好像有很大又很快的記憶體——這就是 Memory Hierarchy 的精髓。
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Exam Tips -->
+<div class="exam-tips">
+  <h3>🎯 期末考高頻重點清單</h3>
+  <div class="two-col">
+    <ul>
+      <li><strong>Address 分解</strong>：Tag / Index / Offset 的計算（必考計算題）</li>
+      <li><strong>AMAT 與 CPI 計算</strong>：帶入公式（必考）</li>
+      <li><strong>Write-Through vs Write-Back</strong>：優缺點、搭配 write buffer / dirty bit</li>
+      <li><strong>3C Misses</strong>：Compulsory / Capacity / Conflict 的區分</li>
+      <li><strong>TLB 運作流程</strong>：TLB hit → TLB miss → Page Fault</li>
+    </ul>
+    <ul>
+      <li><strong>Direct Mapped vs Set Associative vs Fully Associative</strong>：比較各面向</li>
+      <li><strong>Multilevel cache CPI 計算</strong>（有 L2 cache 的範例）</li>
+      <li><strong>磁碟存取時間計算</strong>：Seek + Rotational + Transfer + Controller</li>
+      <li><strong>SEC / DEC</strong>：Hamming code 編解碼邏輯</li>
+      <li><strong>Invalidating Snooping Protocol</strong>：多核心 coherence 的解法</li>
+    </ul>
+  </div>
+  <div class="callout" style="margin-top:14px;">
+    <strong>📌 快速記憶口訣</strong>：「時空局部性 → 階層設計 → Tag/Index/Offset → Hit/Miss/Penalty → LRU換 → Write-Back省 → TLB快 → Page Fault OS管 → Coherence要Invalidate」
+  </div>
+</div>
+
+
+<!-- ===== HOMEWORK PRACTICE SECTION ===== -->
+<div style="padding: 0 40px; margin-top: 32px;">
+  <div style="border-bottom: 2px solid #2a2f50; margin-bottom: 28px; padding-bottom: 14px; display:flex; align-items:center; gap:12px;">
+    <div style="background:rgba(167,139,250,0.2); border:1px solid rgba(167,139,250,0.4); border-radius:10px; padding:8px 14px; font-size:0.8rem; color:#a78bfa; letter-spacing:0.08em; text-transform:uppercase;">作業練習題</div>
+    <h2 style="font-size:1.4rem; font-weight:900; color:#1a1208;">三份作業完整題目與解題</h2>
+  </div>
+  <div style="background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:12px 18px; margin-bottom:24px; font-size:0.88rem; color:#fbbf24;">
+    💡 點擊每個小題的 <strong>「看答案」</strong> 按鈕來顯示解答，自己先想想再看！
+  </div>
+
+<style>
+.ans { display:none; margin-top:10px; background:rgba(46,125,110,0.06); border:1px solid rgba(46,125,110,0.28); border-radius:8px; padding:12px 14px; font-size:0.87rem; color:#e2e8f0; line-height:1.7; }
+.ans-btn { cursor:pointer; display:inline-block; background:rgba(46,125,110,0.12); border:1px solid rgba(46,125,110,0.35); border-radius:6px; padding:3px 12px; font-size:0.78rem; color:#2e7d6e; margin-top:8px; user-select:none; transition:background .2s; }
+.ans-btn:hover { background:rgba(46,125,110,0.2); }
+.q-box { background:rgba(74,124,89,0.05); border:1px solid rgba(74,124,89,0.18); border-radius:8px; padding:14px 16px; margin-bottom:10px; }
+.q-num { font-size:0.8rem; font-weight:700; color:#5b8af5; margin-bottom:6px; }
+.q-text { font-size:0.88rem; color:#cbd5e1; line-height:1.6; }
+.hw-block { background:#faf7f2; border:1px solid #ddd5c5; border-radius:14px; margin-bottom:20px; overflow:hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.hw-header { padding:18px 28px; border-bottom:1px solid #2a2f50; }
+.hw-body { padding:24px 28px; }
+.ex-title { font-size:1rem; font-weight:700; color:#f8fafc; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.ex-title::before { content:''; display:inline-block; width:4px; height:14px; border-radius:2px; background:#5b8af5; flex-shrink:0; }
+.hw2 .ex-title::before { background:#a78bfa; }
+.hw3 .ex-title::before { background:#34d399; }
+.code-box { background:#ede5d5; border:1px solid #c8b898; border-radius:8px; padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:0.82rem; color:#4a3520; margin-bottom:12px; }
+.info-box { background:#ede5d5; border:1px solid #c8b898; border-left:3px solid #4a7c59; border-radius:8px; padding:12px 16px; font-size:0.85rem; color:#e2e8f0; margin-bottom:12px; }
+.hw2 .info-box { border-left-color:#7c5a8a; }
+.hw3 .info-box { border-left-color:#2e7d6e; }
+table.qt { width:100%; border-collapse:collapse; font-size:0.83rem; margin:8px 0; }
+table.qt th { background:#e0d5c0; color:#1a1208; padding:7px 12px; text-align:left; border:1px solid #d0c5a8; }
+table.qt td { padding:6px 12px; border:1px solid #d0c5a8; color:#2c2416; }
+table.qt tr:nth-child(even) td { background:rgba(255,255,255,0.02); }
+</style>
+<script>
+function toggleAns(id) {
+  var el = document.getElementById(id);
+  var btn = document.getElementById('btn-'+id);
+  if (el.style.display === 'block') {
+    el.style.display = 'none';
+    btn.textContent = '看答案';
+  } else {
+    el.style.display = 'block';
+    btn.textContent = '收起答案';
+  }
+}
+</script>
+
+  <!-- ======= HW1 ======= -->
+  <div class="hw-block">
+    <div class="hw-header" style="background:linear-gradient(90deg,rgba(91,138,245,0.15),transparent);">
+      <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;color:#5b8af5;margin-bottom:4px;">第一次作業</div>
+      <div style="font-size:1.1rem;font-weight:700;color:#f8fafc;">Exercise 5.1 · 5.3 · 5.6 — Locality、Direct Mapped Cache、Cache 效能</div>
+    </div>
+    <div class="hw-body">
+
+      <!-- 5.1 -->
+      <div class="ex-title">Exercise 5.1 — Matrix Locality（C 語言，row-major）</div>
+      <div class="code-box">for (I = 0; I &lt; 8; I++)<br>&nbsp;&nbsp;for (J = 0; J &lt; 8000; J++)<br>&nbsp;&nbsp;&nbsp;&nbsp;A[I][J] = B[I][0] + A[J][I];<br><span style="color:#5b5f7a;">// row-major 儲存，32-bit integers，16-byte cache blocks</span></div>
+
+      <div class="q-box">
+        <div class="q-num">5.1.1</div>
+        <div class="q-text">一個 16-byte 的 cache block 可以存幾個 32-bit integer？</div>
+        <span class="ans-btn" id="btn-a511" onclick="toggleAns('a511')">看答案</span>
+        <div class="ans" id="a511">16 bytes ÷ 4 bytes/integer = <strong>4 個</strong></div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.1.2</div>
+        <div class="q-text">哪些變數的存取具有 <strong>temporal locality</strong>（時間局部性）？</div>
+        <span class="ans-btn" id="btn-a512" onclick="toggleAns('a512')">看答案</span>
+        <div class="ans" id="a512"><strong>B[I][0]</strong>：內層迴圈 J 跑 8000 次，每次都存取同一個 B[I][0] → 強烈 temporal locality<br><strong>I, J</strong>（迴圈變數）：每次迭代都存取 → temporal locality</div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.1.3</div>
+        <div class="q-text">哪些變數的存取具有 <strong>spatial locality</strong>（空間局部性）？</div>
+        <span class="ans-btn" id="btn-a513" onclick="toggleAns('a513')">看答案</span>
+        <div class="ans" id="a513"><strong>A[I][J]</strong>：row-major 下 J 遞增 = 連續記憶體 → ✅ spatial locality<br><strong>A[J][I]</strong>：J 遞增但 I 固定，row-major 下是跨 row → 大步距 → ✗ spatial locality<br><strong>B[I][0]</strong>：每次同位置，算 temporal，非 spatial</div>
+      </div>
+
+      <div style="margin-top:18px; margin-bottom:8px; font-size:0.85rem; color:#94a3b8;">同樣的程式改成 Matlab（column-major）：</div>
+      <div class="code-box">for I = 1:8<br>&nbsp;&nbsp;for J = 1:8000<br>&nbsp;&nbsp;&nbsp;&nbsp;A(I,J) = B(I,0) + A(J,I);<br>&nbsp;&nbsp;end<br>end</div>
+
+      <div class="q-box">
+        <div class="q-num">5.1.4</div>
+        <div class="q-text">存一列 8000 個 32-bit integers 需要幾個 16-byte cache blocks？</div>
+        <span class="ans-btn" id="btn-a514" onclick="toggleAns('a514')">看答案</span>
+        <div class="ans" id="a514">8000 × 4 bytes = 32,000 bytes；32,000 ÷ 16 = <strong>2,000 個 cache blocks</strong></div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.1.5</div>
+        <div class="q-text">Matlab (column-major) 下，哪些變數具有 temporal locality？</div>
+        <span class="ans-btn" id="btn-a515" onclick="toggleAns('a515')">看答案</span>
+        <div class="ans" id="a515"><strong>B(I,0)</strong>：同 C 版本，內層 J 迴圈重複存取 → temporal locality<br><strong>I, J</strong>（迴圈變數）→ temporal locality</div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.1.6</div>
+        <div class="q-text">Matlab (column-major) 下，哪些變數具有 spatial locality？</div>
+        <span class="ans-btn" id="btn-a516" onclick="toggleAns('a516')">看答案</span>
+        <div class="ans" id="a516">Column-major 下：<br><strong>A(J,I)</strong>：J 遞增 = 同 column 依序存取 = 連續記憶體 → ✅ spatial locality<br><strong>A(I,J)</strong>：I 固定、J 遞增在 column-major 下是跨 column → ✗ spatial locality</div>
+      </div>
+
+      <!-- 5.3 -->
+      <div class="ex-title" style="margin-top:28px;">Exercise 5.3 — Direct-Mapped Cache 結構計算</div>
+      <div class="info-box">32-bit address：Tag [31–10] = 22 bits，Index [9–5] = 5 bits，Offset [4–0] = 5 bits</div>
+
+      <div class="q-box">
+        <div class="q-num">5.3.1</div>
+        <div class="q-text">Cache block size 是多少 words？</div>
+        <span class="ans-btn" id="btn-a531" onclick="toggleAns('a531')">看答案</span>
+        <div class="ans" id="a531">Offset = 5 bits → block size = 2⁵ = 32 bytes = <strong>8 words</strong>（每 word 4 bytes）</div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.3.2</div>
+        <div class="q-text">Cache 有幾個 entries？</div>
+        <span class="ans-btn" id="btn-a532" onclick="toggleAns('a532')">看答案</span>
+        <div class="ans" id="a532">Index = 5 bits → 2⁵ = <strong>32 entries</strong></div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.3.3</div>
+        <div class="q-text">Total bits / Data storage bits 的比值是多少？</div>
+        <span class="ans-btn" id="btn-a533" onclick="toggleAns('a533')">看答案</span>
+        <div class="ans" id="a533">每個 entry：1 valid bit + 22 tag bits + 256 data bits = 279 bits<br>Total = 32 × 279 = 8,928 bits；Data = 32 × 256 = 8,192 bits<br>Ratio = 8,928 / 8,192 ≈ <strong>1.09</strong></div>
+      </div>
+
+      <div style="margin-top:14px; margin-bottom:8px; font-size:0.85rem; color:#94a3b8;">接下來從 power-on 開始，依序存取以下 byte addresses：</div>
+      <table class="qt"><tr><th>存取順序</th><td>0</td><td>4</td><td>16</td><td>132</td><td>232</td><td>160</td><td>1024</td><td>30</td><td>140</td><td>3100</td><td>180</td><td>2180</td></tr></table>
+
+      <div class="q-box">
+        <div class="q-num">5.3.4</div>
+        <div class="q-text">共有幾個 blocks 被 replaced（替換）？</div>
+        <span class="ans-btn" id="btn-a534" onclick="toggleAns('a534')">看答案</span>
+        <div class="ans" id="a534">
+          先算每個 address 的 index（bits[9:5]）和 tag（bits[31:10]）：<br>
+          <table class="qt" style="margin-top:8px;">
+            <tr><th>Address</th><th>Index</th><th>Tag</th><th>Hit/Miss</th><th>Replace?</th></tr>
+            <tr><td>0</td><td>0</td><td>0</td><td>Miss</td><td>No（空）</td></tr>
+            <tr><td>4</td><td>0</td><td>0</td><td>Hit</td><td>—</td></tr>
+            <tr><td>16</td><td>0</td><td>0</td><td>Hit</td><td>—</td></tr>
+            <tr><td>132</td><td>4</td><td>0</td><td>Miss</td><td>No（空）</td></tr>
+            <tr><td>232</td><td>7</td><td>0</td><td>Miss</td><td>No（空）</td></tr>
+            <tr><td>160</td><td>5</td><td>0</td><td>Miss</td><td>No（空）</td></tr>
+            <tr><td>1024</td><td>0</td><td>1</td><td>Miss</td><td>✅ Yes（踢掉 tag=0）</td></tr>
+            <tr><td>30</td><td>0</td><td>0</td><td>Miss</td><td>✅ Yes（踢掉 tag=1）</td></tr>
+            <tr><td>140</td><td>4</td><td>0</td><td>Hit</td><td>—</td></tr>
+            <tr><td>3100</td><td>12</td><td>3</td><td>Miss</td><td>No（空）</td></tr>
+            <tr><td>180</td><td>5</td><td>0</td><td>Hit</td><td>—</td></tr>
+            <tr><td>2180</td><td>4</td><td>2</td><td>Miss</td><td>✅ Yes（踢掉 tag=0）</td></tr>
+          </table>
+          <strong>Replaced = 3 次</strong>
+        </div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.3.5</div>
+        <div class="q-text">Hit ratio 是多少？</div>
+        <span class="ans-btn" id="btn-a535" onclick="toggleAns('a535')">看答案</span>
+        <div class="ans" id="a535">Hits：4, 16, 140, 180 共 4 次；總共 12 次存取<br>Hit ratio = 4/12 ≈ <strong>33.3%</strong></div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.3.6</div>
+        <div class="q-text">列出 cache 最終狀態（格式：&lt;index, tag, data&gt;）</div>
+        <span class="ans-btn" id="btn-a536" onclick="toggleAns('a536')">看答案</span>
+        <div class="ans" id="a536">
+          &lt;0, 0, Mem[0–31]&gt;<br>
+          &lt;4, 2, Mem[2176–2207]&gt;<br>
+          &lt;5, 0, Mem[160–191]&gt;<br>
+          &lt;7, 0, Mem[224–255]&gt;<br>
+          &lt;12, 3, Mem[3072–3103]&gt;
+        </div>
+      </div>
+
+      <!-- 5.6 -->
+      <div class="ex-title" style="margin-top:28px;">Exercise 5.6 — Cache 效能計算（P1 vs P2）</div>
+      <div class="info-box">Main memory = 70ns，Memory accesses = 36% of instructions<br>
+        P1: L1=2KiB, miss rate=8%, hit time=0.66ns &nbsp;|&nbsp; P2: L1=4KiB, miss rate=6%, hit time=0.90ns</div>
+
+      <div class="q-box">
+        <div class="q-num">5.6.1</div>
+        <div class="q-text">以 L1 hit time 作為 cycle time，P1 和 P2 各自的 clock rate 是多少？</div>
+        <span class="ans-btn" id="btn-a561" onclick="toggleAns('a561')">看答案</span>
+        <div class="ans" id="a561">P1: 1/0.66ns = <strong>1.52 GHz</strong><br>P2: 1/0.90ns = <strong>1.11 GHz</strong></div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.6.2</div>
+        <div class="q-text">P1 和 P2 各自的 AMAT 是多少？</div>
+        <span class="ans-btn" id="btn-a562" onclick="toggleAns('a562')">看答案</span>
+        <div class="ans" id="a562">AMAT = Hit time + Miss rate × Miss penalty<br>P1: 0.66 + 0.08 × 70 = <strong>6.26 ns</strong><br>P2: 0.90 + 0.06 × 70 = <strong>5.10 ns</strong></div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.6.3</div>
+        <div class="q-text">Base CPI = 1，P1 和 P2 各自的 Total CPI 是多少？哪個較快？</div>
+        <span class="ans-btn" id="btn-a563" onclick="toggleAns('a563')">看答案</span>
+        <div class="ans" id="a563">Miss penalty（cycles）= memory time / cycle time<br>
+          P1 penalty = 70/0.66 ≈ 106 cycles；stall = 0.36 × 0.08 × 106 ≈ 3.05 → CPI = <strong>4.05</strong><br>
+          P2 penalty = 70/0.90 ≈ 77.8 cycles；stall = 0.36 × 0.06 × 77.8 ≈ 1.68 → CPI = <strong>2.68</strong><br>
+          <strong style="color:#34d399;">P2 較快</strong></div>
+      </div>
+
+      <div style="margin-top:14px; margin-bottom:8px; font-size:0.85rem; color:#94a3b8;">幫 P1 加上 L2 cache：</div>
+      <div class="info-box">L2 Size = 1MiB，L2 local miss rate = 95%，L2 hit time = 5.62ns</div>
+
+      <div class="q-box">
+        <div class="q-num">5.6.4</div>
+        <div class="q-text">P1 加上 L2 後的 AMAT 是多少？比沒有 L2 好還是差？</div>
+        <span class="ans-btn" id="btn-a564" onclick="toggleAns('a564')">看答案</span>
+        <div class="ans" id="a564">AMAT = L1 hit + L1 miss rate × (L2 hit + L2 miss rate × Memory)<br>
+          = 0.66 + 0.08 × (5.62 + 0.95 × 70) = 0.66 + 0.08 × 72.12 = <strong>6.43 ns</strong><br>
+          比只有 L1 的 6.26ns 還差 → <strong style="color:#fb923c;">更差！</strong> L2 miss rate 太高（95%），加了反而拖慢</div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.6.5</div>
+        <div class="q-text">P1 加上 L2 後的 Total CPI 是多少？</div>
+        <span class="ans-btn" id="btn-a565" onclick="toggleAns('a565')">看答案</span>
+        <div class="ans" id="a565">L2 hit penalty = 5.62/0.66 ≈ 8.5 cycles；L2 miss penalty = 70/0.66 ≈ 106 cycles<br>
+          stall = 0.36 × 0.08 × (8.5 + 0.95×106) = 0.36 × 0.08 × 109.2 ≈ 3.14<br>
+          CPI = <strong>4.14</strong></div>
+      </div>
+
+      <div class="q-box">
+        <div class="q-num">5.6.6</div>
+        <div class="q-text">P1(+L2) vs P2，哪個更快？要讓較慢的追上較快的，需要什麼條件？</div>
+        <span class="ans-btn" id="btn-a566" onclick="toggleAns('a566')">看答案</span>
+        <div class="ans" id="a566">P1+L2 CPI ≈ 4.14 vs P2 CPI ≈ 2.68 → <strong style="color:#fb923c;">P2 仍更快</strong><br>
+          P1 要追上 P2（目標 CPI=2.68）：<br>
+          1 + 0.36 × miss_rate × (8.5 + 0.95×106) = 2.68<br>
+          miss_rate ≈ <strong>4.27%</strong>（P1 的 L1 miss rate 要降到約 4.27%）</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ======= HW2 ======= -->
+  <div class="hw-block hw2">
+    <div class="hw-header" style="background:linear-gradient(90deg,rgba(167,139,250,0.15),transparent);">
+      <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;color:#a78bfa;margin-bottom:4px;">第二次作業</div>
+      <div style="font-size:1.1rem;font-weight:700;color:#f8fafc;">Exercise 5.8 · 5.12 · 5.14 — MTTF/可靠性、Page Table 設計、Shadow vs NPT</div>
+    </div>
+    <div class="hw-body">
+
+      <!-- 5.8 -->
+      <div class="ex-title">Exercise 5.8 — MTTF / MTTR / Availability</div>
+      <div class="info-box" style="border-left-color:#7c5a8a;">MTTF = 3 years，MTTR = 1 day</div>
+
+      <div class="q-box"><div class="q-num">5.8.1</div><div class="q-text">計算 MTBF</div>
+        <span class="ans-btn" id="btn-a581" onclick="toggleAns('a581')">看答案</span>
+        <div class="ans" id="a581">MTBF = MTTF + MTTR = 3×365 + 1 = <strong>1096 days</strong></div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.8.2</div><div class="q-text">計算 Availability</div>
+        <span class="ans-btn" id="btn-a582" onclick="toggleAns('a582')">看答案</span>
+        <div class="ans" id="a582">Availability = MTTF / MTBF = 1095 / 1096 ≈ <strong>99.91%</strong></div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.8.3</div><div class="q-text">MTTR → 0 時，availability 會怎樣？這是現實情況嗎？</div>
+        <span class="ans-btn" id="btn-a583" onclick="toggleAns('a583')">看答案</span>
+        <div class="ans" id="a583">Availability → 100%。不現實——修復永遠需要一定時間。</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.8.4</div><div class="q-text">MTTR 非常大時（裝置很難修），availability 會怎樣？</div>
+        <span class="ans-btn" id="btn-a584" onclick="toggleAns('a584')">看答案</span>
+        <div class="ans" id="a584">Availability → 0%。是，修不好的裝置可用性極低。</div>
+      </div>
+
+      <!-- 5.12 -->
+      <div class="ex-title" style="margin-top:28px;">Exercise 5.12 — Page Table 空間與時間優化</div>
+      <div class="info-box" style="border-left-color:#7c5a8a;">Virtual Address = 43 bits，Physical DRAM = 16 GiB，Page Size = 4 KiB，PTE Size = 4 bytes</div>
+
+      <div class="q-box"><div class="q-num">5.12.1</div><div class="q-text">Single-level page table 需要幾個 PTE？要佔多少 physical memory？</div>
+        <span class="ans-btn" id="btn-a5121" onclick="toggleAns('a5121')">看答案</span>
+        <div class="ans" id="a5121">Page offset = log₂(4KiB) = 12 bits → VPN = 43 - 12 = 31 bits<br>
+          PTEs = 2³¹ ≈ <strong>2 Giga 個</strong><br>
+          Physical memory = 2³¹ × 4 bytes = <strong>8 GiB</strong>（超誇張）</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.12.2</div><div class="q-text">用 multilevel page table 需要幾層？TLB miss 時需幾次 memory reference？</div>
+        <span class="ans-btn" id="btn-a5122" onclick="toggleAns('a5122')">看答案</span>
+        <div class="ans" id="a5122">每個 page table page 可放 4KiB/4B = 1024 = 2¹⁰ 個 PTEs → 每層 index 10 bits<br>
+          VPN = 31 bits → ⌈31/10⌉ = <strong>4 層</strong>（分 10+10+10+1 bits）<br>
+          TLB miss 時需 <strong>4 次 memory references</strong>（每層各一次）</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.12.3</div><div class="q-text">Inverted page table 需幾個 PTE？TLB miss 時 common case 和 worst case 各幾次 memory reference？</div>
+        <span class="ans-btn" id="btn-a5123" onclick="toggleAns('a5123')">看答案</span>
+        <div class="ans" id="a5123">Physical pages = 16GiB / 4KiB = 2²² → <strong>4M 個 PTEs</strong>（以物理頁為索引，比 single-level 小很多）<br>
+          Hash table：Common case = <strong>1 次</strong>（hash 直接命中）；Worst case = hash chain 長度次（全部 collision）</div>
+      </div>
+
+      <div style="margin-top:14px; margin-bottom:8px; font-size:0.85rem; color:#94a3b8;">以下是一個 4-entry TLB 的內容：</div>
+      <table class="qt">
+        <tr><th>Entry</th><th>Valid</th><th>VA Page</th><th>Modified</th><th>Protection</th><th>PA Page</th></tr>
+        <tr><td>1</td><td>1</td><td>140</td><td>1</td><td>RW</td><td>30</td></tr>
+        <tr><td>2</td><td>0</td><td>40</td><td>0</td><td>RX</td><td>34</td></tr>
+        <tr><td>3</td><td>1</td><td>200</td><td>1</td><td>RO</td><td>32</td></tr>
+        <tr><td>4</td><td>1</td><td>280</td><td>0</td><td>RW</td><td>31</td></tr>
+      </table>
+
+      <div class="q-box"><div class="q-num">5.12.4</div><div class="q-text">什麼情況下 Entry 2 的 valid bit 會被設成 0？</div>
+        <span class="ans-btn" id="btn-a5124" onclick="toggleAns('a5124')">看答案</span>
+        <div class="ans" id="a5124">① 該 PTE 從 TLB 被 evict（容量不足）<br>② Context switch 時 OS flush TLB<br>③ 該 page 被 invalidated（如 page unmapped 或 page fault 後）</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.12.5</div><div class="q-text">指令對 VA page 30 執行寫入時會發生什麼事？Software-managed TLB 何時比 hardware-managed TLB 快？</div>
+        <span class="ans-btn" id="btn-a5125" onclick="toggleAns('a5125')">看答案</span>
+        <div class="ans" id="a5125">VA page 30 不在 TLB → <strong>TLB miss</strong> → 查 page table → 載入 PTE 到 TLB → 重試寫入<br>
+          Software TLB 較快的情況：page table 結構複雜（如 inverted page table），hardware walker 無法直接處理，software handler 可自訂優化路徑</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.12.6</div><div class="q-text">指令對 VA page 200 執行寫入時會發生什麼事？</div>
+        <span class="ans-btn" id="btn-a5126" onclick="toggleAns('a5126')">看答案</span>
+        <div class="ans" id="a5126">Entry 3：VA=200，protection=<strong>RO（Read Only）</strong><br>
+          → 寫入 RO page → <strong style="color:#fb923c;">Protection fault</strong>！OS 攔截，通常會終止程序或送出 SIGSEGV</div>
+      </div>
+
+      <!-- 5.14 -->
+      <div class="ex-title" style="margin-top:28px;">Exercise 5.14 — Shadow Page Table vs Nested Page Table (NPT)</div>
+      <div class="info-box" style="border-left-color:#7c5a8a;">Shadow paging：software 在 hypervisor 複製 guest page table，攔截修改保持同步<br>
+        NPT：hardware 支援 VA→PA 和 PA→MA 兩層 page table，pure hardware walk</div>
+
+      <div class="q-box"><div class="q-num">5.14.1</div><div class="q-text">以下操作在 shadow page table 和 NPT 下各會怎樣？<br>
+        (1) Create process (2) TLB miss (3) Page fault (4) Context switch</div>
+        <span class="ans-btn" id="btn-a5141" onclick="toggleAns('a5141')">看答案</span>
+        <div class="ans" id="a5141">
+          <table class="qt">
+            <tr><th>操作</th><th>Shadow Page Table</th><th>Nested Page Table</th></tr>
+            <tr><td>Create process</td><td>Hypervisor 建立 shadow PT，overhead 高</td><td>只需建立 guest PT，overhead 低</td></tr>
+            <tr><td>TLB miss</td><td>查 shadow PT（已整合 VA→MA），1 層 walk，快</td><td>走兩層 PT（VA→PA→MA），memory ref 多</td></tr>
+            <tr><td>Page fault</td><td>需同步更新 guest PT 和 shadow PT，複雜</td><td>只更新 guest PT，NPT 自動處理</td></tr>
+            <tr><td>Context switch</td><td>切換到對應 VM 的 shadow PT</td><td>切換 guest PT + NPT pointer，TLB flush</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.14.2</div><div class="q-text">x86 4-level page table，native vs nested page table 的 TLB miss 各需幾次 memory reference？</div>
+        <span class="ans-btn" id="btn-a5142" onclick="toggleAns('a5142')">看答案</span>
+        <div class="ans" id="a5142"><strong>Native</strong>：4 levels = <strong>4 次</strong><br>
+          <strong>NPT</strong>：每個 guest PT level 在 walk 時，guest 的每個 PTE address 本身也需要經過 NPT 的 4 層 walk。<br>
+          計算：4 guest levels × 5（4 NPT levels + 1）+ 1 final data = <strong>最多 24 次</strong> memory references</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.14.3</div><div class="q-text">TLB miss rate、TLB miss latency、page fault rate、page fault handler latency，各對哪種方案更重要？</div>
+        <span class="ans-btn" id="btn-a5143" onclick="toggleAns('a5143')">看答案</span>
+        <div class="ans" id="a5143"><strong>Shadow PT</strong>：<strong>Page fault rate & page fault handler latency</strong> 最重要（每次 page fault 要同步兩份 PT，超貴）<br>
+          <strong>NPT</strong>：<strong>TLB miss rate & TLB miss latency</strong> 最重要（TLB miss 時需走兩層 PT，memory access 暴增）</div>
+      </div>
+
+      <div style="margin-top:14px; margin-bottom:8px; font-size:0.85rem; color:#94a3b8;">已知參數：</div>
+      <div class="info-box" style="border-left-color:#7c5a8a;">TLB misses = 0.2 / 1000 instructions，NPT TLB miss latency = 200 cycles<br>
+        Page faults = 0.001 / 1000 instructions，Shadow page fault overhead = 30,000 cycles</div>
+
+      <div class="q-box"><div class="q-num">5.14.4</div><div class="q-text">Native CPI = 1，使用 shadow page table 和 NPT 的 CPI 各是多少？</div>
+        <span class="ans-btn" id="btn-a5144" onclick="toggleAns('a5144')">看答案</span>
+        <div class="ans" id="a5144"><strong>Shadow PT</strong>：overhead 主要來自 page fault<br>
+          CPI = 1 + (0.001/1000) × 30,000 = 1 + 0.03 = <strong>1.03</strong><br>
+          <strong>NPT</strong>：overhead 主要來自 TLB miss<br>
+          CPI = 1 + (0.2/1000) × 200 = 1 + 0.04 = <strong>1.04</strong></div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.14.5</div><div class="q-text">有哪些技術可以減少 Shadow Paging 的 overhead？</div>
+        <span class="ans-btn" id="btn-a5145" onclick="toggleAns('a5145')">看答案</span>
+        <div class="ans" id="a5145">① 使用更大的 page（superpage），減少 page fault 次數<br>② Lazy synchronization（延遲同步 shadow PT）<br>③ 增大 TLB size，減少 TLB miss 進而減少 shadow PT 被查詢的頻率</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.14.6</div><div class="q-text">有哪些技術可以減少 NPT 的 overhead？</div>
+        <span class="ans-btn" id="btn-a5146" onclick="toggleAns('a5146')">看答案</span>
+        <div class="ans" id="a5146">① 增大 TLB size，降低 TLB miss rate<br>② 使用 superpage，減少 PT levels<br>③ Hardware TLB prefetching<br>④ 增加 TLB associativity</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ======= HW3 ======= -->
+  <div class="hw-block hw3">
+    <div class="hw-header" style="background:linear-gradient(90deg,rgba(52,211,153,0.15),transparent);">
+      <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;color:#34d399;margin-bottom:4px;">第三次作業</div>
+      <div style="font-size:1.1rem;font-weight:700;color:#f8fafc;">Exercise 5.16 · 5.17 · 5.18 — Write Buffer FSM、Cache Coherence、CMP Cache 設計</div>
+    </div>
+    <div class="hw-body">
+
+      <!-- 5.16 -->
+      <div class="ex-title">Exercise 5.16 — Write Buffer FSM 設計</div>
+      <div class="info-box" style="border-left-color:#2e7d6e;">Cache：direct-mapped, write-back, write-allocate（參考 Figure 5.40）<br>
+        在此基礎上加入一個容量 1 block 的 write buffer。<br>
+        Write buffer 的作用：dirty miss 時，不用等 writeback 完才讀新 block，先把 dirty block 丟進 write buffer，立刻 fetch 新 block；dirty block 再慢慢寫回 memory。</div>
+
+      <div class="q-box"><div class="q-num">5.16.1</div><div class="q-text">Write buffer 正在把 dirty block writeback 到 memory 時，CPU 發出一個 <strong>cache hit</strong> 的請求，應該怎麼處理？</div>
+        <span class="ans-btn" id="btn-a5161" onclick="toggleAns('a5161')">看答案</span>
+        <div class="ans" id="a5161">Cache hit 不需要存取 memory，直接從 cache 服務 CPU。<br><strong>CPU 不需要等</strong>，write buffer 繼續在背景 writeback，兩者並行。</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.16.2</div><div class="q-text">Write buffer 正在 writeback 時，CPU 發出一個 <strong>cache miss</strong> 的請求，應該怎麼處理？</div>
+        <span class="ans-btn" id="btn-a5162" onclick="toggleAns('a5162')">看答案</span>
+        <div class="ans" id="a5162">Cache miss 需要存取 memory bus 來 fetch 新 block，但 bus 正被 write buffer 佔用。<br><strong>CPU 需要等</strong>，直到 write buffer 完成 writeback 釋放 bus，才能開始 fetch。</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.16.3</div><div class="q-text">設計一個支援 write buffer 的 FSM，說明各狀態及轉換條件。</div>
+        <span class="ans-btn" id="btn-a5163" onclick="toggleAns('a5163')">看答案</span>
+        <div class="ans" id="a5163">
+          <strong>State 0：Idle</strong>（等待 CPU 請求）<br>
+          &nbsp;&nbsp;→ Hit：State 0（直接服務）<br>
+          &nbsp;&nbsp;→ Miss，block not dirty：State 1（fetch）<br>
+          &nbsp;&nbsp;→ Miss，block dirty：State 2（把 dirty block → write buffer，同時開始 fetch）<br><br>
+          <strong>State 1：Fetching</strong>（從 memory 取新 block，write buffer 空閒）<br>
+          &nbsp;&nbsp;→ Fetch 完成：State 0<br><br>
+          <strong>State 2：Fetching + Write Buffer Busy</strong>（fetch 新 block 同時 write buffer 有 dirty block 待寫）<br>
+          &nbsp;&nbsp;→ CPU hit 請求：繼續 State 2（cache hit 不需要 bus，直接服務）<br>
+          &nbsp;&nbsp;→ CPU miss 請求：繼續 State 2（需要 bus 但忙，等待）<br>
+          &nbsp;&nbsp;→ Fetch 完成：State 3（開始 writeback）<br><br>
+          <strong>State 3：Writing Back</strong>（把 write buffer 的 dirty block 寫回 memory）<br>
+          &nbsp;&nbsp;→ Writeback 完成，無 pending miss：State 0<br>
+          &nbsp;&nbsp;→ Writeback 完成，有 pending miss：State 1（開始 fetch）
+        </div>
+      </div>
+
+      <!-- 5.17 -->
+      <div class="ex-title" style="margin-top:28px;">Exercise 5.17 — Cache Coherence & Memory Consistency</div>
+      <div class="info-box" style="border-left-color:#2e7d6e;">X[0] = X[1] = 0（初始，同一個 cache block X）<br>
+        P1: X[0]++; X[1] = 3; &nbsp;&nbsp;|&nbsp;&nbsp; P2: X[0] = 5; X[1] += 2;</div>
+
+      <div class="q-box"><div class="q-num">5.17.1</div><div class="q-text">正確的 coherence protocol 下，X[0] 和 X[1] 有哪些可能的最終值組合？<br>若 protocol 不保證 coherence，再列出至少一個額外可能的值。</div>
+        <span class="ans-btn" id="btn-a5171" onclick="toggleAns('a5171')">看答案</span>
+        <div class="ans" id="a5171"><strong>Coherent 下可能的值（X[0], X[1]）：</strong><br>
+          • P1全先：X[0]=1→P2寫5，X[1]=3→P2+=2=5 → <strong>(5, 5)</strong><br>
+          • P2全先：X[0]=5→P1++=6，X[1]=2→P1=3 → <strong>(6, 3)</strong><br>
+          • 交錯：P1寫X[0]=1，P2覆寫X[0]=5，P1寫X[1]=3，P2讀X[1]=3+2=5 → <strong>(5, 5)</strong><br>
+          • 交錯：P2寫X[0]=5，P1++=6，P2寫X[1]+=2=2，P1=3 → <strong>(6, 3)</strong><br>
+          → 結合所有合法交錯：<strong>(5,5), (6,3), (5,3), (6,5)</strong><br><br>
+          <strong>不 coherent 下額外可能：</strong><br>
+          P2 看不到 P1 的 X[0]=1 就讀了舊值 → 如 <strong style="color:#fb923c;">(1, 2)</strong> 或 <strong style="color:#fb923c;">(1, 5)</strong></div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.17.2</div><div class="q-text">以 Snooping protocol 為例，列出一個合法的操作序列（以得到其中一種結果為例）。</div>
+        <span class="ans-btn" id="btn-a5172" onclick="toggleAns('a5172')">看答案</span>
+        <div class="ans" id="a5172">以 P1 先執行為例，最終結果 (5, 5)：<br>
+          1. P1 讀 X[0]（miss）→ 廣播讀取，取得 block，X[0]=0<br>
+          2. P1 寫 X[0]=1（hit）→ 廣播 Invalidate，P2 的 copy 失效<br>
+          3. P2 讀 X[0]（miss，因被 invalidate）→ 取得 X[0]=1<br>
+          4. P2 寫 X[0]=5 → 廣播 Invalidate<br>
+          5. P1 寫 X[1]=3 → 廣播 Invalidate<br>
+          6. P2 讀 X[1]（miss）→ 取得 X[1]=3<br>
+          7. P2 寫 X[1]=3+2=5<br>
+          最終：X[0]=5, X[1]=5</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.17.3</div><div class="q-text">執行以上讀寫操作，best-case 和 worst-case 各需要幾次 cache miss？</div>
+        <span class="ans-btn" id="btn-a5173" onclick="toggleAns('a5173')">看答案</span>
+        <div class="ans" id="a5173"><strong>Best case（2 misses）</strong>：block 本來就在兩個 cache 中，只有寫入時的 invalidate 造成對方 miss，P1 寫 X[0] invalidate P2 → P2 再讀時 miss (1)，P1 寫 X[1] invalidate P2 → P2 再讀時 miss (2)<br>
+          <strong>Worst case（4 misses）</strong>：P1 讀 X[0] miss (1)，P2 讀 X[0] miss (2)（被 invalidate），P1 讀 X[1] miss (3)，P2 讀 X[1] miss (4)</div>
+      </div>
+
+      <div style="margin-top:18px; margin-bottom:8px; font-size:0.85rem; color:#94a3b8;">Memory consistency 部分（A=B=0 初始，不同 cache blocks）：</div>
+      <div class="info-box" style="border-left-color:#2e7d6e;">P1: A=1; B=2; A+=2; B++;　（最終 A=3, B=3）<br>P2: C=B; D=A;</div>
+
+      <div class="q-box"><div class="q-num">5.17.4</div><div class="q-text">在保證 consistency 的情況下，C 和 D 有哪些可能的值組合？</div>
+        <span class="ans-btn" id="btn-a5174" onclick="toggleAns('a5174')">看答案</span>
+        <div class="ans" id="a5174">Consistency 保證：P2 看到的 B 和 A 必須符合 P1 的寫入順序（看到比較新的 B，就不能看到比 B 更舊版本對應的 A）<br>
+          <strong>合法的 (C, D) 組合：</strong><br>
+          (0,0), (0,1), (0,3), (2,1), (2,3), (3,3)</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.17.5</div><div class="q-text">若不保證 consistency，額外可能出現哪些 (C,D) 值？</div>
+        <span class="ans-btn" id="btn-a5175" onclick="toggleAns('a5175')">看答案</span>
+        <div class="ans" id="a5175">如 <strong style="color:#fb923c;">(3, 0)</strong>（看到最新 B=3 但 A=0，違反寫入順序）或 <strong style="color:#fb923c;">(2, 0)</strong></div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.17.6</div><div class="q-text">哪種 write policy + write allocation 組合，最能讓 coherence protocol 實作變簡單？</div>
+        <span class="ans-btn" id="btn-a5176" onclick="toggleAns('a5176')">看答案</span>
+        <div class="ans" id="a5176"><strong style="color:#34d399;">Write-through + No write-allocate</strong> 最簡單：<br>
+          每次寫入直接寫到 memory，memory 永遠是最新值；其他 cache 只需 invalidate 或直接從 memory 讀；不用追蹤 dirty bits，snoop 邏輯最簡單。<br>
+          Write-back + write-allocate 效能好但 dirty block 管理讓 coherence 複雜很多。</div>
+      </div>
+
+      <!-- 5.18 -->
+      <div class="ex-title" style="margin-top:28px;">Exercise 5.18 — CMP Private vs Shared L2 Cache</div>
+      <div class="info-box" style="border-left-color:#2e7d6e;">L1 miss：每 32 instructions 一次（= 0.03125 misses/instr）<br>
+        Private L2 hit = 5 cycles，Shared L2 hit = 20 cycles，Memory = 180 cycles</div>
+      <table class="qt" style="margin-bottom:12px;">
+        <tr><th></th><th>Private MPI（misses/instr）</th><th>Shared MPI</th></tr>
+        <tr><td>Benchmark A</td><td>0.30% = 0.003</td><td>0.12% = 0.0012</td></tr>
+        <tr><td>Benchmark B</td><td>0.06% = 0.0006</td><td>0.03% = 0.0003</td></tr>
+      </table>
+
+      <div class="q-box"><div class="q-num">5.18.1</div><div class="q-text">哪種 cache 設計對各 benchmark 更好？用數據支持你的結論。</div>
+        <span class="ans-btn" id="btn-a5181" onclick="toggleAns('a5181')">看答案</span>
+        <div class="ans" id="a5181">CPI = 1 + (MPI × memory_cycles) + ((L1_miss_rate - MPI) × L2_hit_cycles)<br>
+          L1 miss rate = 1/32 = 0.03125<br><br>
+          <strong>Benchmark A：</strong><br>
+          Private: 1 + 0.003×180 + (0.03125-0.003)×5 = 1 + 0.54 + 0.141 = <strong>1.681</strong><br>
+          Shared: 1 + 0.0012×180 + (0.03125-0.0012)×20 = 1 + 0.216 + 0.601 = <strong>1.817</strong><br>
+          → <strong style="color:#34d399;">Private 較好</strong><br><br>
+          <strong>Benchmark B：</strong><br>
+          Private: 1 + 0.0006×180 + (0.03125-0.0006)×5 = 1 + 0.108 + 0.153 = <strong>1.261</strong><br>
+          Shared: 1 + 0.0003×180 + (0.03125-0.0003)×20 = 1 + 0.054 + 0.619 = <strong>1.673</strong><br>
+          → <strong style="color:#34d399;">Private 較好</strong></div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.18.2</div><div class="q-text">① Shared cache latency 加倍（→40 cycles）時哪種更好？<br>② Off-chip memory latency 加倍（→360 cycles）時哪種更好？</div>
+        <span class="ans-btn" id="btn-a5182" onclick="toggleAns('a5182')">看答案</span>
+        <div class="ans" id="a5182">① Shared latency 加倍 → Shared 的 L2 hit cost 更高，Private 優勢更大 → <strong style="color:#34d399;">Private 更好</strong><br>
+          ② Memory latency 加倍 → miss penalty 大增，Shared 的低 MPI 優勢更顯著（少一半的 memory access）→ <strong style="color:#fb923c;">Shared 可能更好</strong></div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.18.3</div><div class="q-text">討論 single-threaded、multi-threaded、multiprogrammed workload 下 private vs shared L2 的優缺點。若加上 on-chip L3 cache 呢？</div>
+        <span class="ans-btn" id="btn-a5183" onclick="toggleAns('a5183')">看答案</span>
+        <div class="ans" id="a5183"><strong>Private L2：</strong>優→低延遲；缺→跨 core 無法共享資料，重複資料浪費空間<br>
+          <strong>Shared L2：</strong>優→多執行緒可共享資料減少 miss，容量利用率高；缺→延遲高，bandwidth 競爭<br><br>
+          Single-threaded：Private 優（低延遲）；Multi-threaded：Shared 優（thread 間共享資料多）；Multiprogrammed：Private 優（各程式資料獨立）<br><br>
+          加上 L3：主流設計變成 <strong>Private L2 + Shared L3</strong>，兩全其美——L2 快，L3 大且共享</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.18.4</div><div class="q-text">Base CPI = 1（ideal L2），non-blocking cache 讓 concurrent L2 misses 從 1 提升到 2，<br>對 Shared L2 和 Private L2 各提升多少效能？</div>
+        <span class="ans-btn" id="btn-a5184" onclick="toggleAns('a5184')">看答案</span>
+        <div class="ans" id="a5184">Concurrent misses 加倍 → effective miss penalty 減半 → memory stall 部分大約砍半<br><br>
+          以 Benchmark A 為例：<br>
+          Shared L2 原 CPI=1.817，stall=0.817 → 砍半 → stall≈0.41 → 新 CPI≈<strong>1.41</strong>（提升約 22%）<br>
+          Private L2 原 CPI=1.681，stall=0.681 → 砍半 → stall≈0.34 → 新 CPI≈<strong>1.34</strong>（提升約 20%）</div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.18.5</div><div class="q-text">假設每 18 個月 core 數加倍，3 年後需要多少倍的 off-chip memory bandwidth 才能維持相同的 per-core 效能？</div>
+        <span class="ans-btn" id="btn-a5185" onclick="toggleAns('a5185')">看答案</span>
+        <div class="ans" id="a5185">3 年 = 2 個 18 個月週期 → cores × 2² = <strong>4×</strong><br>
+          維持相同 per-core bandwidth → 總 bandwidth 需要 <strong>4 倍</strong></div>
+      </div>
+
+      <div class="q-box"><div class="q-num">5.18.6</div><div class="q-text">在整個 memory hierarchy 中，哪些優化可以增加 concurrent misses 的數量？</div>
+        <span class="ans-btn" id="btn-a5186" onclick="toggleAns('a5186')">看答案</span>
+        <div class="ans" id="a5186">① <strong>Non-blocking (lockup-free) cache</strong>：允許 hit under miss / miss under miss<br>
+          ② <strong>Out-of-order execution</strong>：CPU 在 miss 期間繼續執行不相依指令<br>
+          ③ <strong>Hardware prefetching</strong>：預取資料，隱藏 miss latency<br>
+          ④ <strong>MSHR (Miss Status Holding Registers)</strong>：同時追蹤多個 outstanding misses<br>
+          ⑤ <strong>Memory-level parallelism (MLP)</strong>：多個 miss 同時在 memory 系統中進行</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+
+<div style="margin: 40px 40px 0; border-top: 3px solid #c8b898; padding-top: 32px; display:flex; align-items:center; gap:14px;">
+  <div style="background:rgba(46,125,110,0.12); border:1px solid rgba(46,125,110,0.35); border-radius:10px; padding:8px 16px; font-size:0.8rem; color:#2e7d6e; letter-spacing:0.08em; text-transform:uppercase; white-space:nowrap;">Chapter 6</div>
+  <h2 style="font-size:1.4rem; font-weight:900; color:#1a1208;">Parallel Processors from Client to Cloud</h2>
+</div>
+
+
+<div class="hero">
+  <div class="hero-badge">COD 5th · Chapter 6</div>
+  <h1>Parallel Processors<br><span>§6.1 Introduction & §6.2 Parallel Programming</span></h1>
+  <p>Slides 1–13 完整筆記</p>
+</div>
+
+<div class="container">
+
+  <!-- §6.1 -->
+  <div class="section s1">
+    <div class="section-header">
+      <div class="section-icon">🎯</div>
+      <div>
+        <h2>§6.1 Introduction</h2>
+        <div class="sub">為什麼要並行？Hardware vs Software</div>
+      </div>
+    </div>
+    <div class="section-body">
+
+      <h3>為什麼需要並行處理器？</h3>
+      <ul>
+        <li>目標：連接多台電腦來獲得更高的效能</li>
+        <li><strong>Multiprocessors</strong>：可擴展性（Scalability）、可用性（Availability）、電源效率（Power efficiency）</li>
+        <li><strong>Task-level parallelism</strong>（process-level）：對獨立 jobs 有高 throughput</li>
+        <li><strong>Parallel processing program</strong>：單一程式跑在多個 processors 上</li>
+        <li><strong>Multicore microprocessors</strong>：單一晶片上有多個 processor cores</li>
+      </ul>
+
+      <h3>Hardware vs Software 的分類</h3>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>⚙️ Hardware</h4>
+          <ul>
+            <li><strong>Serial</strong>：e.g., Pentium 4</li>
+            <li><strong>Parallel</strong>：e.g., quad-core Xeon e5345</li>
+          </ul>
+        </div>
+        <div class="mini-card">
+          <h4>💻 Software</h4>
+          <ul>
+            <li><strong>Sequential</strong>：e.g., matrix multiplication</li>
+            <li><strong>Concurrent</strong>：e.g., operating system</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout warn">
+        <strong>⚠️ 關鍵挑戰</strong>：Sequential / concurrent software 都可以跑在 serial / parallel hardware 上。真正難的是：<strong>如何有效利用 parallel hardware</strong>！
+      </div>
+
+      <h3>本章之前已涵蓋的並行主題</h3>
+      <ul>
+        <li>§2.11：Parallelism and Instructions → Synchronization</li>
+        <li>§3.6：Parallelism and Computer Arithmetic → Subword Parallelism</li>
+        <li>§4.10：Advanced Instruction-Level Parallelism</li>
+        <li>§5.10：Parallelism and Memory Hierarchies → Cache Coherence</li>
+      </ul>
+
+    </div>
+  </div>
+
+  <!-- §6.2 -->
+  <div class="section s2">
+    <div class="section-header">
+      <div class="section-icon">⚡</div>
+      <div>
+        <h2>§6.2 The Difficulty of Creating Parallel Programs</h2>
+        <div class="sub">Amdahl's Law · Scaling · Strong vs Weak Scaling</div>
+      </div>
+    </div>
+    <div class="section-body">
+
+      <h3>為什麼平行程式很難寫？</h3>
+      <ul>
+        <li>Parallel software 才是真正的問題所在</li>
+        <li>必須獲得顯著的效能提升，不然直接用更快的 uniprocessor 就好（而且更簡單）</li>
+        <li>三大困難：
+          <ul>
+            <li><strong>Partitioning</strong>：怎麼切割工作給不同 processor</li>
+            <li><strong>Coordination</strong>：processor 之間怎麼協調</li>
+            <li><strong>Communications overhead</strong>：溝通本身的代價</li>
+          </ul>
+        </li>
+      </ul>
+
+      <h3>Amdahl's Law（超重要！）</h3>
+      <ul>
+        <li>程式中<strong>不能被並行化的 sequential 部分</strong>會限制最大加速比</li>
+      </ul>
+      <div class="formula">
+        Speedup = 1 / [ (1 - F_parallelizable) + F_parallelizable / N ]<br><br>
+        <span class="c">N = processor 數量，F = 可並行化的比例</span>
+      </div>
+      <div class="callout orange">
+        <strong>🔥 經典例題</strong>：100 processors，想達到 90× speedup，需要多少比例可以被並行化？<br><br>
+        90 = 1 / [(1 - F) + F/100]<br>
+        解出 <strong>F = 0.999</strong>（也就是只有 <strong>0.1%</strong> 的時間可以是 sequential！）<br><br>
+        <strong>結論</strong>：sequential 部分的比例極小才能達到高倍數 speedup，這非常難達到。
+      </div>
+
+      <h3>Scaling Example（具體數字計算）</h3>
+      <div class="callout green">
+        <strong>情境</strong>：workload = 10 個 scalar 加法 + 10×10 矩陣加法（= 100 個加法）<br>
+        Sequential total = (10 + 100) × t_add = 110 t_add
+      </div>
+      <table class="t">
+        <tr><th>Processors</th><th>Time</th><th>Speedup</th><th>% of potential</th></tr>
+        <tr><td>1（baseline）</td><td>110 t_add</td><td>1×</td><td>—</td></tr>
+        <tr><td>10</td><td>10 + 100/10 = <strong>20 t_add</strong></td><td>110/20 = <strong>5.5×</strong></td><td><strong>55%</strong></td></tr>
+        <tr><td>100</td><td>10 + 100/100 = <strong>11 t_add</strong></td><td>110/11 = <strong>10×</strong></td><td><strong>10%</strong></td></tr>
+      </table>
+      <div class="callout warn">
+        <strong>⚠️ 注意</strong>：processors 從 10 增加到 100（×10），但 speedup 只從 5.5 增加到 10（遠不到 ×10）。Sequential 的 10 t_add 成為瓶頸。
+      </div>
+
+      <h3>Scaling Example（cont）— 矩陣更大的情況</h3>
+      <div class="callout green">
+        <strong>情境</strong>：改成 100×100 矩陣，sequential total = (10 + 10000) × t_add = 10010 t_add
+      </div>
+      <table class="t">
+        <tr><th>Processors</th><th>Time</th><th>Speedup</th><th>% of potential</th></tr>
+        <tr><td>10</td><td>10 + 10000/10 = <strong>1010 t_add</strong></td><td>10010/1010 = <strong>9.9×</strong></td><td><strong>99%</strong></td></tr>
+        <tr><td>100</td><td>10 + 10000/100 = <strong>110 t_add</strong></td><td>10010/110 = <strong>91×</strong></td><td><strong>91%</strong></td></tr>
+      </table>
+      <div class="callout green">
+        <strong>💡 關鍵觀察</strong>：矩陣越大（parallel 工作量越大），sequential 部分佔比越低，speedup 越接近理想值。這就是為什麼 <strong>problem size 很重要</strong>！
+      </div>
+
+      <h3>Strong vs Weak Scaling（很愛考的概念）</h3>
+      <div class="two-col">
+        <div class="mini-card">
+          <h4>💪 Strong Scaling</h4>
+          <ul>
+            <li><strong>Problem size 固定</strong>，增加 processors</li>
+            <li>目標：同樣的問題跑更快</li>
+            <li>受 Amdahl's Law 限制嚴重</li>
+            <li>如上方兩個例子</li>
+          </ul>
+        </div>
+        <div class="mini-card">
+          <h4>🔄 Weak Scaling</h4>
+          <ul>
+            <li><strong>Problem size 隨 processor 數等比增加</strong></li>
+            <li>目標：用更多 processors 解更大的問題，維持相同時間</li>
+            <li>更容易達到近線性 speedup</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>Weak Scaling 範例</strong>：<br>
+        10 processors + 10×10 矩陣 → Time = 20 t_add<br>
+        100 processors + 32×32 矩陣（~1000 elements）→ Time = 10 + 1000/100 = <strong>20 t_add</strong><br>
+        時間不變！→ <strong>Constant performance（理想的 weak scaling）</strong>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Quick Summary -->
+  <div class="exam-tips">
+    <h3>🎯 §6.1–6.2 期末考重點</h3>
+    <div class="two-col">
+      <ul>
+        <li><strong>Amdahl's Law 公式</strong>：一定要會代公式算 speedup 或 F</li>
+        <li><strong>Sequential 瓶頸</strong>：就算用 100 processors，0.1% 的 sequential code 就能把你壓到 90× 以下</li>
+        <li><strong>Strong vs Weak Scaling 定義</strong>：problem size 固定 vs 隨 processor 數等比增長</li>
+      </ul>
+      <ul>
+        <li><strong>Scaling 計算題</strong>：給 scalar + 矩陣大小，算 time 和 speedup（記得 scalar 部分不能被並行化！）</li>
+        <li><strong>三大 parallel 程式困難</strong>：Partitioning, Coordination, Communications overhead</li>
+        <li><strong>Weak scaling 的好處</strong>：可以接近線性 speedup，不受 Amdahl's Law 嚴重限制</li>
+      </ul>
+    </div>
+    <div class="callout warn" style="margin-top:14px;">
+      <strong>📌 Amdahl's Law 記憶技巧</strong>：分母 = (sequential 部分) + (parallel 部分 ÷ N)。Sequential 部分 = (1 - F)，就算 N → ∞，speedup 上限也只有 1/(1-F)。
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
